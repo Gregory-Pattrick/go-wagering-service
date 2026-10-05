@@ -1,30 +1,23 @@
-# Go Wagering Service
+## Current Status
 
-Serviço para processamento distribuído de operações financeiras de apostas.
+Minimal application composed with Uber Fx, structured JSON logging,
+and startup and shutdown hooks.
 
-## Objetivo
+Includes a test covering application composition and the initial lifecycle.
+Financial operations and external integrations are not yet implemented.
 
-Processar operações por HTTP e SQS com precisão monetária,
-idempotência persistente, controle de concorrência e recuperação de falhas.
+## Local Execution
 
-## Stack planejada
+```powershell
+go run ./cmd/service
+```
 
-- Go e Uber Fx
-- PostgreSQL com pgx e SQL explícito
-- Keycloak para autenticação e autorização
-- AWS SQS em ambiente local
-- Docker Compose
-- OpenTelemetry, Prometheus e Grafana
+Press Ctrl+C to stop the application.
 
-## Estado atual
+## Verification
 
-Inicialização do módulo Go e das configurações do repositório.
-
-A aplicação e suas dependências locais serão adicionadas nas próximas etapas.
-
-## Desenvolvimento
-
-A versão de Go está declarada no arquivo go.mod.
-
-As instruções de execução e testes serão atualizadas conforme
-as funcionalidades forem implementadas.
+```powershell
+go test ./...
+go vet ./...
+go build ./...
+```
