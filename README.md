@@ -18,8 +18,12 @@ and startup failure when the configured port is already in use.
 Integration tests cover PostgreSQL connectivity, application database
 role and connection pool shutdown.
 
-Financial operations, financial schema migrations, Keycloak authentication
-and SQS integration are not yet implemented.
+Keycloak is provisioned with local service identities and client credentials
+token issuance. Token validation and authorization in the Go API are not
+yet implemented.
+
+Financial operations, financial schema migrations and SQS integration
+are not yet implemented.
 
 ## Prerequisites
 
@@ -105,7 +109,7 @@ A dependency readiness endpoint covering PostgreSQL and SQS is planned.
 Build and start the application and PostgreSQL:
 
 ```powershell
-docker compose up --build -d --wait --wait-timeout 120
+docker compose up --build -d --wait --wait-timeout 240
 ```
 
 Check container status and application logs:
@@ -152,7 +156,8 @@ the HTTP listener.
 The `tests` service uses the `testing` profile and does not start during
 the default Compose startup.
 
-Keycloak and local SQS provisioning are not yet implemented.
+Compose also provisions Keycloak with an automatically imported realm.
+Local SQS provisioning is not yet implemented.
 
 ## Verification
 
@@ -273,3 +278,79 @@ Integration tests verify database connectivity, the `wagering_app` role,
 its non-superuser status and connection pool shutdown.
 
 Financial tables and versioned migrations are not implemented yet.
+
+## Local Identity Provider
+
+Keycloak runs at http://localhost:8081 and imports the `wagering` realm
+from `deploy/keycloak/wagering-realm.json`.
+
+Start and verify the identity provider:
+
+```powershell
+docker compose up -d --wait --wait-timeout 240 keycloak
+docker compose ps keycloak
+
+Invoke-RestMethod -Uri "http://localhost:8081/realms/wagering/.well-known/openid-configuration"
+```
+
+### Local Service Identities
+
+| Client ID | Local client secret | Actor type | Provider ID |
+| --- | --- | --- | --- |
+| provider-a | provider-a-local-secret | provider | provider-a |
+| provider-b | provider-b-local-secret | provider | provider-b |
+| wallet-service | wallet-service-local-secret | internal | Not applicable |
+
+These credentials are public development examples, not production secrets.
+
+Clients use `client_credentials`. Interactive login, implicit flow and
+password grants are disabled for these clients.
+
+Tokens expire after five minutes and include the `wagering-api` audience.
+Provider identities are assigned by Keycloak through fixed token claims.
+
+Request a provider token:
+
+```powershell
+$tokenResponse = Invoke-RestMethod `
+    -Method Post `
+    -Uri "http://localhost:8081/realms/wagering/protocol/openid-connect/token" `
+    -ContentType "application/x-www-form-urlencoded" `
+    -Body @{
+        grant_type = "client_credentials"
+        client_id = "provider-a"
+        client_secret = "provider-a-local-secret"
+    }
+
+$providerToken = $tokenResponse.access_token
+```
+
+The admin console is available at http://localhost:8081/admin/.
+The bootstrap username is `admin`. Its password defaults to `admin_local`
+and can be configured through `KEYCLOAK_ADMIN_PASSWORD`.
+
+### Development Lifecycle
+
+Keycloak uses its embedded development database without a persistent
+volume. Recreating the Keycloak container discards administrative changes
+and signing keys, then imports the versioned realm configuration again.
+
+After editing the realm JSON, recreate only Keycloak:
+
+```powershell
+docker compose up -d --force-recreate --wait --wait-timeout 240 keycloak
+```
+
+Obtain new tokens after recreation. The PostgreSQL data volume is unaffected.
+
+A normal container restart preserves the existing realm. Startup import
+does not overwrite a realm that already exists.
+
+This setup uses HTTP and development mode for local execution.
+Production deployment requires TLS, managed secrets and a production
+identity-provider database.
+
+### Implementation Status
+
+Token issuance is available. JWT signature verification and API
+authorization are not implemented yet. Liveness remains public.
