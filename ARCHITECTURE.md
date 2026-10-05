@@ -27,11 +27,12 @@ Keycloak assigns fixed claims to each service client:
 Provider identity must come from a verified access token. Request bodies
 and URL parameters cannot establish or override the authenticated provider.
 
-### Planned API Enforcement
+### API Enforcement
 
-The API will verify token signatures using the trusted Keycloak JWKS,
-restrict accepted signing algorithms, and validate issuer, audience,
-expiration and required identity claims.
+The HTTP server authenticates requests before routing, except for public
+GET/HEAD health checks. The OIDC adapter verifies RS256 signatures against
+the trusted Keycloak JWKS, issuer, audience, expiration and identity claims.
+Client identities are checked against an explicit configuration allowlist.
 
 The configured issuer is `http://localhost:8081/realms/wagering`.
 Container networking may require a separate trusted internal JWKS URL;
@@ -41,7 +42,9 @@ Provider clients will be restricted to submitting and reading their own
 transactions. Authorization must also run before returning idempotent
 replays. Wallet endpoints will require the internal service identity.
 
-Unrecognized identities and unsupported actor types will be denied.
+Unrecognized identities and unsupported actor types are denied.
+The actor-policy middleware and provider-ownership guard are tested, but
+their use in financial handlers and replay use cases is still pending.
 
 ### Local Environment
 
@@ -54,6 +57,13 @@ Production requires TLS, managed secrets and durable IdP storage.
 
 ### Current Status
 
-Realm provisioning and service token issuance are implemented.
-Go token verification and endpoint authorization are pending.
+Realm provisioning, service token issuance, Go token verification and
+HTTP authentication are implemented. Real-Keycloak tests exercise actor
+policies and provider isolation through test-only handlers. Financial
+endpoint authorization and replay isolation remain pending with those
+endpoints and use cases.
+
+See [Authentication](docs/authentication.md) for configuration, lifecycle,
+tests and limitations, including runtime JWKS failures currently returning
+HTTP 401 instead of a separately classified HTTP 503.
 Broker authentication and authorization will be documented with SQS setup.

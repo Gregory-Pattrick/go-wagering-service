@@ -8,6 +8,7 @@ import (
 	"time"
 
 	httpapi "github.com/Gregory-Pattrick/go-wagering-service/internal/adapters/http"
+	"github.com/Gregory-Pattrick/go-wagering-service/internal/adapters/oidcauth"
 	"github.com/Gregory-Pattrick/go-wagering-service/internal/adapters/postgres"
 	"github.com/Gregory-Pattrick/go-wagering-service/internal/config"
 
@@ -19,7 +20,7 @@ func New(options ...fx.Option) *fx.App {
 	base := []fx.Option{
 		fx.Module(
 			"config",
-			fx.Provide(config.Load, config.LoadDatabase),
+			fx.Provide(config.Load, config.LoadDatabase, config.LoadAuth),
 		),
 		fx.Module(
 			"observability",
@@ -29,6 +30,11 @@ func New(options ...fx.Option) *fx.App {
 			"postgres",
 			fx.Provide(postgres.NewDatabase),
 			fx.Invoke(func(*postgres.Database) {}),
+		),
+		fx.Module(
+			"authentication",
+			fx.Provide(oidcauth.NewVerifier, httpapi.NewAuthentication),
+			fx.Invoke(func(*oidcauth.Verifier) {}),
 		),
 		fx.Module(
 			"application",

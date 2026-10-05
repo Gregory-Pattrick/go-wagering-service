@@ -39,12 +39,13 @@ func NewServer(
 	lifecycle fx.Lifecycle,
 	cfg config.Config,
 	router *http.ServeMux,
+	authentication *Authentication,
 	logger *slog.Logger,
 	shutdowner fx.Shutdowner,
 ) *http.Server {
 	server := &http.Server{
 		Addr:              cfg.HTTPAddress,
-		Handler:           router,
+		Handler:           authentication.Protect(router),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,

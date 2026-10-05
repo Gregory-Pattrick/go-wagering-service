@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Gregory-Pattrick/go-wagering-service/internal/adapters/oidcauth"
 	"github.com/Gregory-Pattrick/go-wagering-service/internal/adapters/postgres"
 	"github.com/Gregory-Pattrick/go-wagering-service/internal/config"
 
@@ -25,6 +26,7 @@ func TestPostgresLifecycleIntegration(t *testing.T) {
 	var database *postgres.Database
 
 	app := New(
+		fx.Replace(&oidcauth.Verifier{}),
 		fx.Decorate(func(cfg config.Config) config.Config {
 			cfg.HTTPAddress = "127.0.0.1:0"
 			return cfg

@@ -19,8 +19,13 @@ Integration tests cover PostgreSQL connectivity, application database
 role and connection pool shutdown.
 
 Keycloak is provisioned with local service identities and client credentials
-token issuance. Token validation and authorization in the Go API are not
-yet implemented.
+token issuance. The Go HTTP server verifies access tokens before routing,
+except for public health checks.
+
+Actor authorization policies and provider ownership checks are covered by
+unit tests and real-Keycloak integration tests. Their application to
+financial endpoints and idempotent replays is pending implementation of
+those business operations.
 
 Financial operations, financial schema migrations and SQS integration
 are not yet implemented.
@@ -38,7 +43,7 @@ The commands below use PowerShell.
 Start PostgreSQL:
 
 ```powershell
-docker compose up -d --wait postgres
+docker compose up -d --wait --wait-timeout 240 postgres keycloak
 ```
 
 Stop the containerized application if it is using port 8080:
@@ -352,5 +357,13 @@ identity-provider database.
 
 ### Implementation Status
 
-Token issuance is available. JWT signature verification and API
-authorization are not implemented yet. Liveness remains public.
+Token issuance, JWT signature verification and HTTP authentication are
+implemented. Liveness remains public.
+
+Financial endpoints and their resource-level authorization are still
+pending.
+
+See [Authentication](docs/authentication.md) for configuration, policies,
+test commands and current limitations. Host configuration examples are
+available in `.env.auth.example`; the application does not load this file
+automatically.
