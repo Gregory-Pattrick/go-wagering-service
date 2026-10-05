@@ -8,6 +8,7 @@ import (
 	"time"
 
 	httpapi "github.com/Gregory-Pattrick/go-wagering-service/internal/adapters/http"
+	"github.com/Gregory-Pattrick/go-wagering-service/internal/adapters/postgres"
 	"github.com/Gregory-Pattrick/go-wagering-service/internal/config"
 
 	"go.uber.org/fx"
@@ -18,11 +19,16 @@ func New(options ...fx.Option) *fx.App {
 	base := []fx.Option{
 		fx.Module(
 			"config",
-			fx.Provide(config.Load),
+			fx.Provide(config.Load, config.LoadDatabase),
 		),
 		fx.Module(
 			"observability",
 			fx.Provide(newLogger),
+		),
+		fx.Module(
+			"postgres",
+			fx.Provide(postgres.NewDatabase),
+			fx.Invoke(func(*postgres.Database) {}),
 		),
 		fx.Module(
 			"application",

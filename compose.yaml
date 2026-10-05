@@ -11,6 +11,7 @@ services:
     environment:
       HTTP_ADDR: "0.0.0.0:8080"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      DATABASE_URL: "postgres://wagering_app:wagering_app_local@postgres:5432/wagering?sslmode=disable"
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,6 +36,18 @@ services:
       retries: 12
       start_period: 10s
     stop_grace_period: 30s
+
+  tests:
+    profiles: ["testing"]
+    build:
+      context: .
+      target: test
+    image: go-wagering-service:test
+    environment:
+      DATABASE_URL: "postgres://wagering_app:wagering_app_local@postgres:5432/wagering?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:

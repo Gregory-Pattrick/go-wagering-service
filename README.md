@@ -1,30 +1,61 @@
+# Go Wagering Service
+
+Go backend for a wagering service, currently under development.
+
 ## Current Status
 
 HTTP application composed with Uber Fx, environment configuration,
-structured JSON logging and graceful shutdown.
+structured JSON logging, PostgreSQL connectivity and graceful shutdown.
 
-The public liveness endpoint is available at GET /health/live.
+The public liveness endpoint is available at `GET /health/live`.
+
+The application connects to PostgreSQL through `pgxpool` during startup.
+The connection pool is initialized before the HTTP server starts and
+closed after the HTTP server stops.
 
 Tests cover configuration validation, HTTP liveness, listener shutdown
 and startup failure when the configured port is already in use.
+Integration tests cover PostgreSQL connectivity, application database
+role and connection pool shutdown.
 
-Financial operations and external integrations are not yet implemented.
+Financial operations, financial schema migrations, Keycloak authentication
+and SQS integration are not yet implemented.
+
+## Prerequisites
+
+- Go matching the version declared in `go.mod` for execution on the host
+- Docker Engine or Docker Desktop with Linux containers
+- Docker Compose
+
+The commands below use PowerShell.
 
 ## Local Execution
 
+Start PostgreSQL:
+
 ```powershell
+docker compose up -d --wait postgres
+```
+
+Stop the containerized application if it is using port 8080:
+
+```powershell
+docker compose stop app
+```
+
+Configure the host application and start it:
+
+```powershell
+$env:HTTP_ADDR = "127.0.0.1:8080"
+$env:LOG_LEVEL = "INFO"
+$env:DATABASE_URL = "postgres://wagering_app:wagering_app_local@127.0.0.1:5432/wagering?sslmode=disable"
+
 go run ./cmd/service
 ```
 
 Press Ctrl+C to stop the application.
 
-## Verification
-
-```powershell
-go test ./...
-go vet ./...
-go build ./...
-```
+The application does not automatically load `.env` files.
 
 ## Configuration
 
@@ -34,57 +65,54 @@ Configuration is read from process environment variables.
 | --- | --- | --- |
 | HTTP_ADDR | 127.0.0.1:8080 | HTTP listener address |
 | LOG_LEVEL | INFO | DEBUG, INFO, WARN or ERROR; case-insensitive |
+| DATABASE_URL | None; required | PostgreSQL connection URL |
 
 Invalid configuration prevents application startup.
 Defaults apply only when a variable is absent.
 
 The `.env.example` file documents the available settings.
-The application does not automatically load `.env` files.
 
-PowerShell example:
+Compose explicitly provides `DATABASE_URL` using the `postgres` service
+hostname. When running Go on the host, use `127.0.0.1` instead.
 
-```powershell
-$env:HTTP_ADDR = "127.0.0.1:9090"
-$env:LOG_LEVEL = "DEBUG"
-
-go run ./cmd/service
-```
+`POSTGRES_ADMIN_PASSWORD` configures the local PostgreSQL administrator
+password through Compose and defaults to `postgres_local`.
+It is not an application configuration variable.
 
 ## Liveness
 
-With the application running:
+With the application running on port 8080:
 
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/health/live"
 ```
 
-Expected response:
+Expected JSON response:
 
 ```json
 {"status":"ok"}
 ```
 
-This endpoint checks application liveness only.
-Dependency readiness will be implemented alongside PostgreSQL and SQS.
+PowerShell displays the response as an object.
+
+This endpoint checks application liveness only. It does not query
+PostgreSQL or report dependency readiness.
+
+A dependency readiness endpoint covering PostgreSQL and SQS is planned.
 
 ## Docker
 
-Prerequisites:
-
-- Docker Engine or Docker Desktop with Linux containers
-- Docker Compose
-
-Build and start the application:
+Build and start the application and PostgreSQL:
 
 ```powershell
-docker compose up --build -d
+docker compose up --build -d --wait --wait-timeout 120
 ```
 
-Check container status and logs:
+Check container status and application logs:
 
 ```powershell
 docker compose ps
-docker compose logs --tail=30 app
+docker compose logs --tail=40 app
 ```
 
 Check liveness:
@@ -99,7 +127,13 @@ Stop the application gracefully:
 docker compose stop app
 ```
 
-Remove the stopped application container and Compose network:
+Start it again:
+
+```powershell
+docker compose start app
+```
+
+Stop and remove the Compose service containers and network:
 
 ```powershell
 docker compose down
@@ -109,11 +143,29 @@ The application listens on `0.0.0.0:8080` inside the container.
 The published port is bound to `127.0.0.1:8080` on the host.
 
 The runtime image runs as a non-root user and contains no shell.
-Its Go version matches the version declared in `go.mod`.
+The build stage uses the Go version declared in `go.mod`.
 
-Compose currently runs the application and PostgreSQL.
-The Go application is not connected to PostgreSQL yet.
-Keycloak and local SQS provisioning will be added next.
+Compose starts the application after the PostgreSQL health check succeeds.
+The application then verifies its own database connection before starting
+the HTTP listener.
+
+The `tests` service uses the `testing` profile and does not start during
+the default Compose startup.
+
+Keycloak and local SQS provisioning are not yet implemented.
+
+## Verification
+
+Run unit and HTTP lifecycle tests, static analysis and compilation:
+
+```powershell
+go test ./...
+go vet ./...
+go build ./...
+```
+
+These commands do not require a running PostgreSQL instance.
+Database integration tests use the separate `integration` build tag.
 
 ## Linux Tests with the Race Detector
 
@@ -123,7 +175,7 @@ Build the test image:
 docker build --target test -t go-wagering-service:test .
 ```
 
-Run tests without reusing cached test results:
+Run tests with the race detector and without cached test results:
 
 ```powershell
 docker run --rm go-wagering-service:test
@@ -164,20 +216,16 @@ PostgreSQL runs with a persistent named volume and a health check.
 These credentials are for local development only.
 
 The administrator password can be configured with
-POSTGRES_ADMIN_PASSWORD. Migration and application passwords are
-defined in deploy/postgres/001-bootstrap.sql.
+`POSTGRES_ADMIN_PASSWORD`. Migration and application passwords are
+defined in `deploy/postgres/001-bootstrap.sql`.
 
 The application and migration accounts are not superusers.
 The application account cannot create tables.
 Table privileges will be granted explicitly by migrations.
 
-### Startup
-
-```powershell
-docker compose up --build -d --wait --wait-timeout 120
-```
-
 ### Database Verification
+
+With PostgreSQL running:
 
 ```powershell
 docker compose exec postgres psql -U postgres -d wagering -c "SELECT current_database(), version();"
@@ -185,13 +233,43 @@ docker compose exec postgres psql -U postgres -d wagering -c "SELECT current_dat
 
 ### Persistence
 
-The postgres_data volume survives container removal with
-docker compose down.
+The `postgres_data` volume survives container removal with
+`docker compose down`.
 
-Do not add -v unless you intentionally want to delete the local database.
+Do not add `-v` unless you intentionally want to delete the local database.
 
 Bootstrap scripts run only when the data directory is empty.
 Changing bootstrap SQL or initialization passwords does not update
 an existing database automatically.
 
 Subsequent schema changes must use versioned migrations.
+
+## PostgreSQL Connection
+
+The application connects to PostgreSQL through `pgxpool` using
+`DATABASE_URL`.
+
+The database initialization hook uses a five-second timeout.
+Startup fails if the initial database connection cannot be established.
+
+The pool is initialized before the HTTP server starts and closed after
+the HTTP server stops.
+
+Each application instance uses a pool with a maximum of 10 connections.
+The Compose application uses the `wagering_app` database account.
+
+### Integration Tests
+
+Run integration tests against the real PostgreSQL container with the
+race detector enabled:
+
+```powershell
+docker compose --profile testing run --build --rm tests go test -tags=integration -race -count=1 ./...
+```
+
+This command builds the test image and starts PostgreSQL as a dependency.
+
+Integration tests verify database connectivity, the `wagering_app` role,
+its non-superuser status and connection pool shutdown.
+
+Financial tables and versioned migrations are not implemented yet.

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Gregory-Pattrick/go-wagering-service/internal/adapters/postgres"
 	"github.com/Gregory-Pattrick/go-wagering-service/internal/config"
 
 	"go.uber.org/fx"
@@ -20,6 +21,7 @@ func TestApplicationServesLivenessAndReleasesListener(t *testing.T) {
 	var server *http.Server
 
 	app := New(
+		fx.Replace(&postgres.Database{}),
 		fx.Decorate(func(cfg config.Config) config.Config {
 			cfg.HTTPAddress = "127.0.0.1:0"
 			return cfg
@@ -97,7 +99,7 @@ func TestApplicationRejectsOccupiedPort(t *testing.T) {
 	t.Setenv("HTTP_ADDR", listener.Addr().String())
 	t.Setenv("LOG_LEVEL", "INFO")
 
-	app := New()
+	app := New(fx.Replace(&postgres.Database{}))
 
 	if err := app.Err(); err != nil {
 		t.Fatalf("compose application: %v", err)
