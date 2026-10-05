@@ -1,0 +1,14 @@
+name: go-wagering-service
+
+services:
+  app:
+    build:
+      context: .
+      target: runtime
+    image: go-wagering-service:local
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      HTTP_ADDR: "0.0.0.0:8080"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+    stop_grace_period: 20s
