@@ -6,12 +6,18 @@ import (
 	"os"
 	"time"
 
+	"example.com/go-wagering-service/internal/config"
+
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 )
 
 func New() *fx.App {
 	return fx.New(
+		fx.Module(
+			"config",
+			fx.Provide(config.Load),
+		),
 		fx.Module(
 			"observability",
 			fx.Provide(newLogger),
@@ -28,18 +34,27 @@ func New() *fx.App {
 	)
 }
 
-func newLogger() *slog.Logger {
+func newLogger(cfg config.Config) *slog.Logger {
 	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: cfg.LogLevel,
 	})
 
 	return slog.New(handler).With("service", "go-wagering-service")
 }
 
-func registerLifecycle(lifecycle fx.Lifecycle, logger *slog.Logger) {
+func registerLifecycle(
+	lifecycle fx.Lifecycle,
+	logger *slog.Logger,
+	cfg config.Config,
+) {
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			logger.InfoContext(ctx, "application starting")
+			logger.InfoContext(
+				ctx,
+				"application starting",
+				"httpAddress",
+				cfg.HTTPAddress,
+			)
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {

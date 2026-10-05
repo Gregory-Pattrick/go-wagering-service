@@ -7,6 +7,9 @@ import (
 )
 
 func TestApplicationStartsAndStops(t *testing.T) {
+	t.Setenv("HTTP_ADDR", "127.0.0.1:8080")
+	t.Setenv("LOG_LEVEL", "INFO")
+
 	app := New()
 
 	if err := app.Err(); err != nil {
@@ -27,5 +30,16 @@ func TestApplicationStartsAndStops(t *testing.T) {
 
 	if err := app.Start(ctx); err != nil {
 		t.Fatalf("start application: %v", err)
+	}
+}
+
+func TestApplicationRejectsInvalidConfiguration(t *testing.T) {
+	t.Setenv("HTTP_ADDR", "127.0.0.1:8080")
+	t.Setenv("LOG_LEVEL", "INVALID")
+
+	app := New()
+
+	if err := app.Err(); err == nil {
+		t.Fatal("expected application composition to reject invalid configuration")
 	}
 }
