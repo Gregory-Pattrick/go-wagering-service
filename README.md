@@ -111,8 +111,9 @@ The published port is bound to `127.0.0.1:8080` on the host.
 The runtime image runs as a non-root user and contains no shell.
 Its Go version matches the version declared in `go.mod`.
 
-At this stage, Compose runs the application only.
-PostgreSQL, Keycloak and local SQS provisioning will be added next.
+Compose currently runs the application and PostgreSQL.
+The Go application is not connected to PostgreSQL yet.
+Keycloak and local SQS provisioning will be added next.
 
 ## Linux Tests with the Race Detector
 
@@ -139,3 +140,58 @@ Building the runtime image does not automatically run the test stage.
 
 The race detector checks Go memory access during executed tests.
 Distributed financial correctness requires additional integration tests.
+
+## Local PostgreSQL
+
+PostgreSQL runs with a persistent named volume and a health check.
+
+| Setting | Value |
+| --- | --- |
+| Image | postgres:17.11-bookworm |
+| Host address | 127.0.0.1:5432 |
+| Compose network address | postgres:5432 |
+| Database | wagering |
+| Application schema | wagering |
+
+### Local Development Accounts
+
+| Account | Purpose | Local password |
+| --- | --- | --- |
+| postgres | Bootstrap and administration | postgres_local |
+| wagering_migrator | Schema migrations | wagering_migrator_local |
+| wagering_app | Application queries | wagering_app_local |
+
+These credentials are for local development only.
+
+The administrator password can be configured with
+POSTGRES_ADMIN_PASSWORD. Migration and application passwords are
+defined in deploy/postgres/001-bootstrap.sql.
+
+The application and migration accounts are not superusers.
+The application account cannot create tables.
+Table privileges will be granted explicitly by migrations.
+
+### Startup
+
+```powershell
+docker compose up --build -d --wait --wait-timeout 120
+```
+
+### Database Verification
+
+```powershell
+docker compose exec postgres psql -U postgres -d wagering -c "SELECT current_database(), version();"
+```
+
+### Persistence
+
+The postgres_data volume survives container removal with
+docker compose down.
+
+Do not add -v unless you intentionally want to delete the local database.
+
+Bootstrap scripts run only when the data directory is empty.
+Changing bootstrap SQL or initialization passwords does not update
+an existing database automatically.
+
+Subsequent schema changes must use versioned migrations.
