@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"example.com/go-wagering-service/internal/config"
+	"github.com/Gregory-Pattrick/go-wagering-service/internal/config"
 
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"

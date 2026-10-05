@@ -1,6 +1,6 @@
 package main
 
-import "example.com/go-wagering-service/internal/bootstrap"
+import "github.com/Gregory-Pattrick/go-wagering-service/internal/bootstrap"
 
 func main() {
 	bootstrap.New().Run()

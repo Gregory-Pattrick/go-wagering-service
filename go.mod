@@ -1,4 +1,4 @@
-module example.com/go-wagering-service
+module github.com/Gregory-Pattrick/go-wagering-service
 
 go 1.27.1
 
