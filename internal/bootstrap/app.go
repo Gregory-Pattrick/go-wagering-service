@@ -10,6 +10,8 @@ import (
 	httpapi "github.com/Gregory-Pattrick/go-wagering-service/internal/adapters/http"
 	"github.com/Gregory-Pattrick/go-wagering-service/internal/adapters/oidcauth"
 	"github.com/Gregory-Pattrick/go-wagering-service/internal/adapters/postgres"
+	"github.com/Gregory-Pattrick/go-wagering-service/internal/adapters/postgres/finance"
+	"github.com/Gregory-Pattrick/go-wagering-service/internal/application/financial"
 	"github.com/Gregory-Pattrick/go-wagering-service/internal/config"
 
 	"go.uber.org/fx"
@@ -38,11 +40,13 @@ func New(options ...fx.Option) *fx.App {
 		),
 		fx.Module(
 			"application",
+			fx.Provide(newFinancialService),
 			fx.Invoke(registerLifecycle),
 		),
 		fx.Module(
 			"http",
-			fx.Provide(httpapi.NewRouter, httpapi.NewServer),
+			fx.Provide(httpapi.NewRouter, httpapi.NewServer, httpapi.NewFinancialAPI),
+			fx.Invoke(httpapi.RegisterFinancialRoutes),
 			fx.Invoke(func(*http.Server) {}),
 		),
 		fx.WithLogger(func(logger *slog.Logger) fxevent.Logger {
@@ -73,5 +77,16 @@ func registerLifecycle(lifecycle fx.Lifecycle, logger *slog.Logger) {
 			logger.InfoContext(ctx, "application stopping")
 			return nil
 		},
+	})
+}
+
+// Resolve the pool when a use case runs: Fx constructors execute before OnStart.
+func newFinancialService(database *postgres.Database) *financial.Service {
+	return financial.New(func() (financial.Backend, error) {
+		pool, err := database.Pool()
+		if err != nil {
+			return nil, err
+		}
+		return finance.New(pool), nil
 	})
 }
