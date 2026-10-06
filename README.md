@@ -162,7 +162,7 @@ The `tests` service uses the `testing` profile and does not start during
 the default Compose startup.
 
 Compose also provisions Keycloak with an automatically imported realm.
-Local SQS provisioning is not yet implemented.
+Local SQS queues are provisioned automatically through MiniStack.
 
 ## Verification
 
@@ -367,3 +367,31 @@ See [Authentication](docs/authentication.md) for configuration, policies,
 test commands and current limitations. Host configuration examples are
 available in `.env.auth.example`; the application does not load this file
 automatically.
+
+## SQS Implementation Status
+
+The local environment includes input and output FIFO queues, their
+dead-letter queues and redrive configuration.
+
+Provisioning is repeatable and preserves existing messages.
+Functional checks cover queue configuration, delivery, visibility,
+redelivery, deletion and transport deduplication.
+
+Dedicated producer and consumer IAM policies, the Go SQS adapter,
+financial consumers, inbox and outbox processing are not implemented yet.
+
+Administrative credentials are local provisioning fixtures and are not
+provided to the Go application.
+
+See [Local SQS Infrastructure](docs/sqs.md) for setup and verification.
+
+### Local Emulator Limitation
+
+With AUTH=true, MiniStack enables IAM policy evaluation but does not
+validate general SigV4 signatures.
+
+The unknown-access-key test passes. The incorrect-secret test fails on
+version 1.5.21 and remains a documented security limitation.
+
+Functional SQS checks pass independently of that verification.
+Broker security verification is not complete.
