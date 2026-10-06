@@ -212,3 +212,13 @@ outside SQL transactions, then confirms only its live lease. Acknowledgment loss
 allows stable-event-ID republication. No local mutex or FIFO deduplication is part
 of financial correctness. See [workers](docs/workers.md) for timing, failure
 semantics, test coverage and remaining resilience work.
+
+## Input delivery boundary
+
+An inbox-aware backend decorator runs the existing financial Submit callback
+inside the same SQL unit as inbox completion. A transaction-scoped advisory lock
+protects one consumer/envelope identity before its row exists; unique business
+identities and wallet row locks continue to protect financial correctness.
+Receipts are deleted after commit only. A trusted internal producer owns the
+shared-queue provider-routing boundary. See [consumer](docs/consumer.md) for
+canonical envelope hashing, redrive and shutdown behavior.

@@ -541,3 +541,10 @@ are not yet implemented. Broker readiness and full observability remain pending.
 Reference recovery and outbox publication run in a separate Fx process.
 See [Durable reference and outbox workers](docs/workers.md) for startup,
 configuration, least-privilege publisher credentials and recovery tests.
+
+## SQS Input Consumer
+
+The separate `cmd/consumer` process handles input FIFO messages with a
+transactional inbox and the same financial use case as HTTP. See
+[SQS consumer and transactional inbox](docs/consumer.md) for its trust boundary,
+acknowledgment rules, broker redrive, local execution and real SQS smoke test.
