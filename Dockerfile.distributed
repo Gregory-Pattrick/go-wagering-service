@@ -1,0 +1,12 @@
+# Test-only image: all three process roles run with the Go race detector.
+FROM golang:1.27.1-bookworm
+WORKDIR /app
+ENV GOTOOLCHAIN=local CGO_ENABLED=1
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+COPY . .
+RUN go build -race -trimpath -buildvcs=false -o /out/service ./cmd/service && \
+    go build -race -trimpath -buildvcs=false -o /out/workers ./cmd/workers && \
+    go build -race -trimpath -buildvcs=false -o /out/consumer ./cmd/consumer
+USER 65532:65532
+ENTRYPOINT ["/out/service"]
