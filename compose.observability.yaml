@@ -1,0 +1,30 @@
+# Include after compose.tracing.yaml, with workers, consumer and tracing profiles.
+services:
+  prometheus:
+    profiles: [observability]
+    image: prom/prometheus:v3.15.0
+    command: [--config.file=/etc/prometheus/prometheus.yaml, --storage.tsdb.path=/prometheus, --storage.tsdb.retention.time=7d]
+    volumes:
+      - ./deploy/observability/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9093:9090"
+  grafana:
+    volumes:
+      - ./deploy/observability/dashboards:/var/lib/grafana/dashboards:ro
+  dashboard-check:
+    profiles: [observability]
+    image: ministackorg/ministack:1.5.21
+    entrypoint: [python, /observability/check.py]
+    environment:
+      API_URLS: http://app:8080,http://app:8080,http://app:8080
+      KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/wagering/protocol/openid-connect/token
+      WALLET_CLIENT_SECRET: "${WALLET_CLIENT_SECRET:-wallet-service-local-secret}"
+      PROVIDER_A_CLIENT_SECRET: "${PROVIDER_A_CLIENT_SECRET:-provider-a-local-secret}"
+      GRAFANA_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-grafana_local}"
+    volumes:
+      - ./deploy/observability:/observability:ro
+      - ./deploy/distributed:/distributed:ro
+      - ./deploy/sqs:/scripts:ro
+volumes:
+  prometheus_data:

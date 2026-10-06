@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 5s
+  scrape_timeout: 3s
+scrape_configs:
+  - job_name: wagering-api
+    static_configs:
+      - targets: [app:9090]
+  - job_name: wagering-workers
+    static_configs:
+      - targets: [workers:9090]
+  - job_name: wagering-consumer
+    static_configs:
+      - targets: [consumer:9090]
