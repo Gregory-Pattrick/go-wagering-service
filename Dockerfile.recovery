@@ -1,0 +1,11 @@
+# Separate executable and build tag: production images contain no crash probes.
+FROM golang:1.27.1-bookworm
+WORKDIR /app
+ENV GOTOOLCHAIN=local CGO_ENABLED=1
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+COPY . .
+RUN go test -tags=faultinjection -race -count=1 ./internal/testsupport/crashprobe && \
+    go build -tags=faultinjection -race -trimpath -buildvcs=false -o /out/crashprobe ./cmd/crashprobe
+USER 65532:65532
+ENTRYPOINT ["/out/crashprobe"]
