@@ -1,0 +1,2 @@
+DROP TABLE wagering.inbox,wagering.transaction_work,wagering.outbox,wagering.wallet_ledger_entries,wagering.wager_transactions,wagering.wallets CASCADE;
+DROP FUNCTION wagering.check_transaction_rows(),wagering.assert_transaction(uuid),wagering.guard_outbox(),wagering.money_json(bigint,text),wagering.check_wallet_change(),wagering.guard_ledger(),wagering.guard_transaction(),wagering.guard_wallet(),wagering.deny_mutation();
