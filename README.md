@@ -400,3 +400,15 @@ version 1.5.21 and remains a documented security limitation.
 
 Functional SQS checks pass independently of that verification.
 Broker security verification is not complete.
+
+## Money Value Object
+
+Monetary values use exact `int64` minor units and explicit BRL or USD
+currencies. External amounts must be nonnegative decimal strings with
+exactly two fractional digits.
+
+The immutable value object validates input, rejects currency mismatches
+and detects arithmetic overflow. No monetary operation uses floating point.
+
+See [Money Value Object](docs/money.md) for the input contract, internal
+signed values and verification details.
