@@ -1,0 +1,121 @@
+# Combine with compose.yaml, compose.finance.yaml, compose.workers.yaml,
+# compose.consumer.yaml and (optionally) compose.telemetry.yaml.
+services:
+  app:
+    environment:
+      TRACING_ENABLED: "true"
+      TRACING_SAMPLE_RATIO: "${TRACING_SAMPLE_RATIO:-1}"
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+    depends_on:
+      trace-migrate:
+        condition: service_completed_successfully
+  workers:
+    environment:
+      TRACING_ENABLED: "true"
+      TRACING_SAMPLE_RATIO: "${TRACING_SAMPLE_RATIO:-1}"
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+    depends_on:
+      trace-migrate:
+        condition: service_completed_successfully
+  consumer:
+    environment:
+      TRACING_ENABLED: "true"
+      TRACING_SAMPLE_RATIO: "${TRACING_SAMPLE_RATIO:-1}"
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+    depends_on:
+      trace-migrate:
+        condition: service_completed_successfully
+  trace-migrate:
+    profiles: [tracing]
+    build:
+      context: .
+      target: test
+    entrypoint: [go, run, ./cmd/migrate]
+    command: []
+    environment:
+      MIGRATION_DATABASE_URL: postgres://wagering_migrator:wagering_migrator_local@postgres:5432/wagering?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+  tempo-init:
+    profiles: [tracing]
+    image: ministackorg/ministack:1.5.21
+    entrypoint: [python, -c, "import os; os.chown('/tempo', 10001, 10001)"]
+    volumes:
+      - tempo_data:/tempo
+    restart: "no"
+  tempo:
+    profiles: [tracing]
+    image: grafana/tempo:2.9.0
+    user: "10001:10001"
+    command: [-config.file=/etc/tempo.yaml]
+    volumes:
+      - ./deploy/tracing/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/tmp/tempo
+    ports:
+      - "127.0.0.1:3200:3200"
+    depends_on:
+      tempo-init:
+        condition: service_completed_successfully
+  otel-collector:
+    profiles: [tracing]
+    image: otel/opentelemetry-collector-contrib:0.162.0
+    command: [--config=/etc/collector.yaml]
+    volumes:
+      - ./deploy/tracing/collector.yaml:/etc/collector.yaml:ro
+    depends_on:
+      tempo:
+        condition: service_started
+    stop_grace_period: 10s
+  grafana:
+    profiles: [tracing]
+    image: grafana/grafana:13.2.2
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-grafana_local}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./deploy/tracing/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      tempo:
+        condition: service_started
+  tracing-tests:
+    profiles: [tracing-testing]
+    build:
+      context: .
+      target: test
+    environment:
+      FINANCE_TEST_MIGRATION_URL: postgres://wagering_migrator:wagering_migrator_local@finance-postgres:5432/wagering?sslmode=disable
+      FINANCE_TEST_DATABASE_URL: postgres://wagering_app:wagering_app_local@finance-postgres:5432/wagering?sslmode=disable
+    command: [go, test, "-tags=financialintegration,tracingintegration", -race, "-count=1", ./internal/adapters/postgres/finance, ./internal/observability/tracing, ./internal/adapters/sqs, ./internal/config]
+    depends_on:
+      finance-postgres:
+        condition: service_healthy
+  tracing-smoke:
+    profiles: [tracing-testing]
+    image: ministackorg/ministack:1.5.21
+    entrypoint: [python, /tracing/smoke.py]
+    environment:
+      API_URLS: http://app:8080,http://app:8080,http://app:8080
+      KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/wagering/protocol/openid-connect/token
+      WALLET_CLIENT_SECRET: "${WALLET_CLIENT_SECRET:-wallet-service-local-secret}"
+      PROVIDER_A_CLIENT_SECRET: "${PROVIDER_A_CLIENT_SECRET:-provider-a-local-secret}"
+      AWS_ENDPOINT_URL: http://ministack:4566
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_EC2_METADATA_DISABLED: "true"
+      SQS_INPUT_QUEUE_URL: http://ministack:4566/000000000000/wager-transactions.fifo
+      TEMPO_URL: http://tempo:3200
+    volumes:
+      - ./deploy/tracing:/tracing:ro
+      - ./deploy/distributed:/distributed:ro
+      - ./deploy/sqs:/scripts:ro
+      - producer_credentials:/credentials:ro
+      - tracing_results:/results
+volumes:
+  tempo_data:
+  grafana_data:
+  tracing_results:

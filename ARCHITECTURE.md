@@ -232,3 +232,12 @@ Unavailable dependencies produce readiness 503 and unavailable gauge values,
 while liveness stays independent. Global database gauges are not additive across
 API replicas. See [observability](docs/observability.md) for metric semantics,
 process-counter limitations and the local monitoring access boundary.
+
+## Optional Distributed Tracing
+
+The financial application depends on a TracePort; the domain remains free of
+OpenTelemetry. Infrastructure adapters propagate W3C trace context through SQS
+attributes and immutable outbox metadata inserted in the financial SQL transaction.
+The asynchronous exporter has bounded queues/timeouts; collector availability
+is excluded from financial readiness. Tracing and metrics share one Fx decorator
+per component. See docs/tracing.md for propagation, loss and validation semantics.

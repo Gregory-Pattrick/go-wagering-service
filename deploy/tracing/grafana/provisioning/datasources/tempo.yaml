@@ -1,0 +1,9 @@
+apiVersion: 1
+datasources:
+  - name: Tempo
+    uid: wagering-tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    isDefault: true

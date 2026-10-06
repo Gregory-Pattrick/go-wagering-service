@@ -571,3 +571,9 @@ of a successful execution.
 See [recovery tests](docs/recovery-tests.md) for test-only fault barriers, actual
 SIGKILL scenarios, durable lease takeover, input redelivery and process restarts.
 The isolated suite records evidence only when executed locally.
+
+## Distributed Tracing
+
+See [tracing](docs/tracing.md) for optional OpenTelemetry instrumentation,
+transactional outbox trace metadata, SQS propagation, Collector/Tempo/Grafana
+and the collector-outage validation workflow. Operational dashboards are separate.
