@@ -456,3 +456,21 @@ See [Immutable Wallet Ledger](docs/ledger.md).
 
 Database immutability, duplicate protection and atomic persistence
 will be implemented and tested in subsequent steps.
+
+## Financial Processing Rules
+
+The domain evaluator connects transactions, wallets and ledger entries
+for BET, WIN, LOSS, REFUND and ROLLBACK.
+
+It validates reference eligibility, full reversal amounts and financial
+context. Missing or pending references leave operations waiting without
+changing the wallet.
+
+Successful movements produce a new wallet state, a processed transaction
+and one ledger entry. LOSS preserves the balance and version without
+creating an entry. Business rejections preserve the wallet.
+
+See [External Financial Processing Rules](docs/processing.md).
+
+Decisions are currently evaluated in memory. Atomic persistence,
+distributed coordination, durable retries and events remain pending.

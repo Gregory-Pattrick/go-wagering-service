@@ -112,3 +112,26 @@ with wallet balances, transaction state and outbox records.
 
 The optional double-entry journal will be implemented separately,
 preserving one wallet ledger entry per financial movement.
+
+## Financial Decisions and Compensation Policy
+
+The domain evaluator performs no I/O and returns a decision for the
+application service to persist atomically.
+
+References must match provider, external identity, player, wallet,
+currency and round. REFUND and ROLLBACK require the original full amount.
+WIN may reference a BET with a different amount.
+
+A BET permits one successful direct compensation: REFUND or ROLLBACK.
+Rolling back a REFUND does not reopen the original BET's compensation
+right. The evaluator uses compensation history supplied by the caller;
+database locking and constraints must enforce this policy concurrently.
+
+Reference lookup must be scoped by provider and external transaction ID.
+The wallet, reference ledger and compensation history must be loaded
+consistently inside the financial SQL transaction.
+
+The application must persist the decision together with the required
+ledger, inbox and outbox records before publishing any events.
+
+See [External Financial Processing Rules](docs/processing.md).
