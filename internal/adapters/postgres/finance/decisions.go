@@ -80,6 +80,9 @@ func (u *Unit) AddEvents(ctx context.Context, transactionID string, batch []even
 		if _, err = u.tx.Exec(ctx, `INSERT INTO wagering.outbox(event_id,transaction_id,event_type,aggregate_id,payload,occurred_at,next_attempt_at) VALUES($1,$2,$3,$4,$5::jsonb,$6,$6)`, event.ID(), transactionID, event.Type(), event.AggregateID(), string(payload), header.OccurredAt); err != nil {
 			return err
 		}
+		if err = u.persistOutboxTrace(ctx, event.ID()); err != nil {
+			return err
+		}
 	}
 	return nil
 }

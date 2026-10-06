@@ -13,7 +13,7 @@ import (
 
 //go:embed *.sql
 var files embed.FS
-var names = []string{"001_finance", "002_accounting"}
+var names = []string{"001_finance", "002_accounting", "003_tracing"}
 
 // Run migrates to target (0..Latest). Down migrations are destructive and are
 // intended for disposable test databases. Each version and its history row share
