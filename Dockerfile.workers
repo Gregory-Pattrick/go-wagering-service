@@ -1,0 +1,13 @@
+FROM golang:1.27.1-bookworm AS build
+WORKDIR /app
+ENV GOTOOLCHAIN=local
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -buildvcs=false -o /out/workers ./cmd/workers
+
+FROM scratch AS runtime
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /out/workers /workers
+USER 65532:65532
+ENTRYPOINT ["/workers"]
