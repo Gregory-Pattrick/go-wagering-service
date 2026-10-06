@@ -427,3 +427,18 @@ SQL transaction boundary.
 
 Wallet persistence, atomic ledger records and cross-process concurrency
 control will be implemented in subsequent steps.
+
+## Transaction Domain
+
+Financial transactions validate operation kinds, amount policies and
+reference requirements. Internal OPENING transactions have a separate
+constructor and do not require external provider metadata.
+
+The domain enforces lifecycle transitions and terminal-state protection.
+Financial result snapshots preserve the original balance and wallet
+version for future persisted replays.
+
+Canonical business payloads are hashed with SHA-256. Database-backed
+idempotency and financial processing will be implemented separately.
+
+See [Transaction Identity and Lifecycle](docs/transactions.md).

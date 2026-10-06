@@ -67,3 +67,28 @@ See [Authentication](docs/authentication.md) for configuration, lifecycle,
 tests and limitations, including runtime JWKS failures currently returning
 HTTP 401 instead of a separately classified HTTP 503.
 Broker authentication and authorization will be documented with SQS setup.
+
+## Transaction Lifecycle and Identity
+
+External transactions start in PENDING and may transition to
+PENDING_REFERENCE, PROCESSED, REJECTED or FAILED. Pending-reference
+transactions may transition to a terminal state. Terminal states cannot
+be changed.
+
+Retryable infrastructure failures must not become permanent FAILED
+outcomes. Unknown commit outcomes require retrying the same identity
+and checking persisted state.
+
+The business payload hash excludes internal transaction IDs,
+idempotency keys and transport metadata. HTTP and SQS will share the
+same domain input and canonical hashing implementation.
+
+Processed results retain the balance and wallet version observed at
+the original decision. Replay must use that snapshot.
+
+This domain layer does not yet enforce persistent idempotency,
+reference eligibility or atomic financial effects. Those guarantees
+require application rules and PostgreSQL transactions.
+
+See [Transaction Identity and Lifecycle](docs/transactions.md) for
+the complete state machine, hash contract and failure codes.
