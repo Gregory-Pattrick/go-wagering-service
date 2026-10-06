@@ -577,3 +577,21 @@ The isolated suite records evidence only when executed locally.
 See [tracing](docs/tracing.md) for optional OpenTelemetry instrumentation,
 transactional outbox trace metadata, SQS propagation, Collector/Tempo/Grafana
 and the collector-outage validation workflow. Operational dashboards are separate.
+
+## Operational Dashboards
+
+The opt-in observability stack provisions Prometheus and a Grafana dashboard
+for HTTP latency, financial outcomes, idempotent replays, retries, conflicts,
+queue depth, outbox age, pending references and reconciliation mismatches.
+
+After applying the tracing setup, run from the repository root:
+
+```powershell
+.\scripts\test-dashboards.ps1
+```
+
+The check generates real local financial records, temporarily pauses workers,
+verifies measurable outbox backlog and resumes workers before checking drain.
+Open http://127.0.0.1:3000/d/wagering-operations after completion.
+See [Operational dashboards](docs/dashboards.md) for prerequisites, local
+credentials, PowerShell instructions and metric interpretation.
