@@ -1,0 +1,82 @@
+# Include the base, finance, workers and consumer Compose files before this one.
+services:
+  monitor-init:
+    image: ministackorg/ministack:1.5.21
+    entrypoint: ["python", "/scripts/monitor_credentials.py"]
+    environment:
+      AWS_ACCESS_KEY_ID: "${SQS_ADMIN_ACCESS_KEY_ID:-test}"
+      AWS_SECRET_ACCESS_KEY: "${SQS_ADMIN_SECRET_ACCESS_KEY:-sqs_admin_local}"
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: "http://ministack:4566"
+      AWS_EC2_METADATA_DISABLED: "true"
+    volumes:
+      - ./deploy/sqs:/scripts:ro
+      - monitor_credentials:/credentials
+    depends_on:
+      sqs-init:
+        condition: service_completed_successfully
+    restart: "no"
+
+  app:
+    environment:
+      OBSERVABILITY_ENABLED: "true"
+      OPS_ADDR: "0.0.0.0:9090"
+      AWS_REGION: us-east-1
+      SQS_ENDPOINT: "http://ministack:4566"
+      MONITOR_CREDENTIALS_FILE: /monitor/monitor.json
+      MONITOR_QUEUES: '{"input":"http://ministack:4566/000000000000/wager-transactions.fifo","output":"http://ministack:4566/000000000000/wager-events.fifo","input_dlq":"http://ministack:4566/000000000000/wager-transactions-dlq.fifo","output_dlq":"http://ministack:4566/000000000000/wager-events-dlq.fifo"}'
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - monitor_credentials:/monitor:ro
+    depends_on:
+      monitor-init:
+        condition: service_completed_successfully
+
+  workers:
+    environment:
+      OBSERVABILITY_ENABLED: "true"
+      OPS_ADDR: "0.0.0.0:9090"
+      MONITOR_CREDENTIALS_FILE: /credentials/publisher.json
+      MONITOR_QUEUES: '{"output":"http://ministack:4566/000000000000/wager-events.fifo"}'
+    ports:
+      - "127.0.0.1:9091:9090"
+
+  consumer:
+    environment:
+      OBSERVABILITY_ENABLED: "true"
+      OPS_ADDR: "0.0.0.0:9090"
+      MONITOR_CREDENTIALS_FILE: /credentials/consumer.json
+      MONITOR_QUEUES: '{"input":"http://ministack:4566/000000000000/wager-transactions.fifo"}'
+    ports:
+      - "127.0.0.1:9092:9090"
+
+  telemetry-tests:
+    profiles: ["telemetry-testing"]
+    build:
+      context: .
+      target: test
+    environment:
+      FINANCE_TEST_MIGRATION_URL: "postgres://wagering_migrator:wagering_migrator_local@finance-postgres:5432/wagering?sslmode=disable"
+      FINANCE_TEST_DATABASE_URL: "postgres://wagering_app:wagering_app_local@finance-postgres:5432/wagering?sslmode=disable"
+    command: ["go", "test", "-tags=financialintegration,telemetryintegration", "-race", "-count=1", "./internal/adapters/postgres/finance", "./internal/observability", "./internal/application/financial", "./internal/adapters/http", "./internal/bootstrap"]
+    depends_on:
+      finance-postgres:
+        condition: service_healthy
+
+  telemetry-smoke:
+    profiles: ["telemetry-testing"]
+    image: ministackorg/ministack:1.5.21
+    entrypoint: ["python", "/scripts/smoke_telemetry.py"]
+    environment:
+      API_BASE_URL: "http://app:8080"
+      KEYCLOAK_TOKEN_URL: "http://keycloak:8080/realms/wagering/protocol/openid-connect/token"
+      WALLET_CLIENT_SECRET: "${WALLET_CLIENT_SECRET:-wallet-service-local-secret}"
+      PROVIDER_A_CLIENT_SECRET: "${PROVIDER_A_CLIENT_SECRET:-provider-a-local-secret}"
+    volumes:
+      - ./deploy/sqs:/scripts:ro
+      - telemetry_smoke_results:/results
+
+volumes:
+  monitor_credentials:
+  telemetry_smoke_results:
