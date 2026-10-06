@@ -222,3 +222,13 @@ identities and wallet row locks continue to protect financial correctness.
 Receipts are deleted after commit only. A trusted internal producer owns the
 shared-queue provider-routing boundary. See [consumer](docs/consumer.md) for
 canonical envelope hashing, redrive and shutdown behavior.
+
+## Telemetry boundary
+
+Optional Fx decorators observe confirmed financial SQL outcomes and transport
+operations without importing a monitoring library into the financial domain.
+Read-only, time-bounded dependency probes update cached health/metrics snapshots.
+Unavailable dependencies produce readiness 503 and unavailable gauge values,
+while liveness stays independent. Global database gauges are not additive across
+API replicas. See [observability](docs/observability.md) for metric semantics,
+process-counter limitations and the local monitoring access boundary.

@@ -548,3 +548,12 @@ The separate `cmd/consumer` process handles input FIFO messages with a
 transactional inbox and the same financial use case as HTTP. See
 [SQS consumer and transactional inbox](docs/consumer.md) for its trust boundary,
 acknowledgment rules, broker redrive, local execution and real SQS smoke test.
+
+## Readiness and Metrics
+
+The optional telemetry Compose override adds dependency readiness and Prometheus
+metrics for the API, reference/outbox workers and SQS consumer. See
+[Dependency readiness and process metrics](docs/observability.md) for the full
+stack command, loopback operations ports, metric meanings and outage tests.
+Telemetry is enabled by `OBSERVABILITY_ENABLED=true`; earlier base commands retain
+their previous behavior when that variable is absent.
