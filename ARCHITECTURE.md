@@ -202,3 +202,13 @@ The same financial use case will be integrated with the SQS consumer. Pending
 reference scheduling is persisted, but its retry worker and the outbox publisher
 are not part of this block. The API integration suite uses real PostgreSQL and
 Keycloak; separate handler/pool tests do not replace the three-process proof.
+
+## Durable worker boundaries
+
+`cmd/workers` composes two cancellable loops through Fx. PostgreSQL claims use
+SKIP LOCKED and fresh lease tokens; financial resumption rechecks ownership under
+row locks and shares the API domain evaluator. The outbox sender performs SQS I/O
+outside SQL transactions, then confirms only its live lease. Acknowledgment loss
+allows stable-event-ID republication. No local mutex or FIFO deduplication is part
+of financial correctness. See [workers](docs/workers.md) for timing, failure
+semantics, test coverage and remaining resilience work.

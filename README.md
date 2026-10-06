@@ -535,3 +535,9 @@ docker compose up --build -d --wait --wait-timeout 180 app
 
 Pending references and outbox events are durable, but their background workers
 are not yet implemented. Broker readiness and full observability remain pending.
+
+## Durable Workers
+
+Reference recovery and outbox publication run in a separate Fx process.
+See [Durable reference and outbox workers](docs/workers.md) for startup,
+configuration, least-privilege publisher credentials and recovery tests.
