@@ -8,6 +8,7 @@ import (
 type Message struct {
 	DeliveryID, Receipt, GroupID string
 	Body                         []byte
+	TraceContext                 map[string]string
 	ReceiveCount                 int
 }
 type Queue interface {

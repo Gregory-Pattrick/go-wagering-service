@@ -62,6 +62,7 @@ func (p *Publisher) Send(ctx context.Context, event delivery.Event) error {
 	_, err := p.client.SendMessage(ctx, &awssqs.SendMessageInput{
 		QueueUrl: aws.String(p.queue), MessageBody: aws.String(string(event.Payload)),
 		MessageGroupId: aws.String(event.AggregateID), MessageDeduplicationId: aws.String(event.ID),
+		MessageAttributes: traceMessageAttributes(ctx),
 	})
 	return err
 }

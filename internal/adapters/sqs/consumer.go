@@ -47,6 +47,7 @@ func NewInputQueue(c config.ConsumerConfig) (*InputQueue, error) {
 func (q *InputQueue) Receive(ctx context.Context) (*delivery.Message, error) {
 	result, err := q.client.ReceiveMessage(ctx, &awssqs.ReceiveMessageInput{
 		QueueUrl: aws.String(q.url), MaxNumberOfMessages: 1, WaitTimeSeconds: 10, VisibilityTimeout: 30,
+		MessageAttributeNames:       []string{"traceparent", "tracestate"},
 		MessageSystemAttributeNames: []types.MessageSystemAttributeName{"ApproximateReceiveCount", "MessageGroupId"},
 	})
 	if err != nil {
@@ -60,7 +61,7 @@ func (q *InputQueue) Receive(ctx context.Context) (*delivery.Message, error) {
 	if err != nil || count < 1 {
 		return nil, errors.New("invalid SQS receive count")
 	}
-	return &delivery.Message{DeliveryID: aws.ToString(msg.MessageId), Receipt: aws.ToString(msg.ReceiptHandle), GroupID: msg.Attributes["MessageGroupId"], Body: []byte(aws.ToString(msg.Body)), ReceiveCount: count}, nil
+	return &delivery.Message{DeliveryID: aws.ToString(msg.MessageId), Receipt: aws.ToString(msg.ReceiptHandle), GroupID: msg.Attributes["MessageGroupId"], Body: []byte(aws.ToString(msg.Body)), ReceiveCount: count, TraceContext: readTraceAttributes(msg.MessageAttributes)}, nil
 }
 func (q *InputQueue) Delete(ctx context.Context, message delivery.Message) error {
 	_, err := q.client.DeleteMessage(ctx, &awssqs.DeleteMessageInput{QueueUrl: aws.String(q.url), ReceiptHandle: aws.String(message.Receipt)})

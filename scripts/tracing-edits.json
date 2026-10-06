@@ -1,0 +1,47 @@
+[
+  {
+    "path": "internal/application/delivery/inbound.go",
+    "old": "Body []byte",
+    "new": "Body []byte\n TraceContext map[string]string"
+  },
+  {
+    "path": "internal/adapters/sqs/publisher.go",
+    "old": "MessageGroupId:aws.String(event.AggregateID),MessageDeduplicationId:aws.String(event.ID),",
+    "new": "MessageGroupId:aws.String(event.AggregateID),MessageDeduplicationId:aws.String(event.ID),\n MessageAttributes:traceMessageAttributes(ctx),"
+  },
+  {
+    "path": "internal/adapters/sqs/consumer.go",
+    "old": "MessageSystemAttributeNames:[]types.MessageSystemAttributeName{\"ApproximateReceiveCount\",\"MessageGroupId\"},",
+    "new": "MessageAttributeNames:[]string{\"traceparent\",\"tracestate\"},\n MessageSystemAttributeNames:[]types.MessageSystemAttributeName{\"ApproximateReceiveCount\",\"MessageGroupId\"},"
+  },
+  {
+    "path": "internal/adapters/sqs/consumer.go",
+    "old": "ReceiveCount:count",
+    "new": "ReceiveCount:count,TraceContext:readTraceAttributes(msg.MessageAttributes)"
+  },
+  {
+    "path": "internal/adapters/postgres/finance/decisions.go",
+    "old": "if _,err=u.tx.Exec(ctx,`INSERT INTO wagering.outbox(event_id,transaction_id,event_type,aggregate_id,payload,occurred_at,next_attempt_at) VALUES($1,$2,$3,$4,$5::jsonb,$6,$6)`,event.ID(),transactionID,event.Type(),event.AggregateID(),string(payload),header.OccurredAt);err!=nil{return err}",
+    "new": "if _,err=u.tx.Exec(ctx,`INSERT INTO wagering.outbox(event_id,transaction_id,event_type,aggregate_id,payload,occurred_at,next_attempt_at) VALUES($1,$2,$3,$4,$5::jsonb,$6,$6)`,event.ID(),transactionID,event.Type(),event.AggregateID(),string(payload),header.OccurredAt);err!=nil{return err}\n  if err=u.persistOutboxTrace(ctx,event.ID());err!=nil{return err}"
+  },
+  {
+    "path": "internal/adapters/postgres/migrations/migrate.go",
+    "old": "var names=[]string{\"001_finance\",\"002_accounting\"}",
+    "new": "var names=[]string{\"001_finance\",\"002_accounting\",\"003_tracing\"}"
+  },
+  {
+    "path": "cmd/service/main.go",
+    "old": "bootstrap.ObserveAPI()",
+    "new": "bootstrap.InstrumentAPI()"
+  },
+  {
+    "path": "cmd/workers/main.go",
+    "old": "bootstrap.ObserveWorkers()",
+    "new": "bootstrap.InstrumentWorkers()"
+  },
+  {
+    "path": "cmd/consumer/main.go",
+    "old": "bootstrap.ObserveConsumer()",
+    "new": "bootstrap.InstrumentConsumer()"
+  }
+]
