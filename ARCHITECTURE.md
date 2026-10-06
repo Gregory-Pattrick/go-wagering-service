@@ -135,3 +135,22 @@ The application must persist the decision together with the required
 ledger, inbox and outbox records before publishing any events.
 
 See [External Financial Processing Rules](docs/processing.md).
+
+## Event Snapshots and Outbox Contract
+
+Event constructors define the event type and schema version.
+All financial events use wallet ID as aggregate ID.
+
+Successful movements produce transaction-processed and balance-changed
+events. LOSS produces only transaction-processed. Repeated reference
+waits produce no additional logical event, and terminal replays must
+not invoke event construction.
+
+The application must persist event IDs and serialized snapshots in
+the same SQL transaction as the financial decision. The future outbox
+publisher must reuse those stored bytes and IDs on every retry.
+
+Event construction alone does not provide persistent deduplication
+or delivery guarantees.
+
+See [Typed Financial Events](docs/events.md).

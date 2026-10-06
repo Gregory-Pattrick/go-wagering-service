@@ -474,3 +474,17 @@ See [External Financial Processing Rules](docs/processing.md).
 
 Decisions are currently evaluated in memory. Atomic persistence,
 distributed coordination, durable retries and events remain pending.
+
+## Financial Domain Events
+
+Typed, immutable events describe processed transactions, business
+rejections, reference waits and wallet balance changes.
+
+Envelopes include event identity, correlation, optional causation,
+UTC occurrence time, schema version and typed financial data.
+Internal OPENING events omit external provider metadata.
+
+Events preserve the original decision snapshot. Outbox persistence
+and broker publication will be implemented separately.
+
+See [Typed Financial Events](docs/events.md).
