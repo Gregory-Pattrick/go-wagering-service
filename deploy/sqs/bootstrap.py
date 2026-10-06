@@ -5,6 +5,7 @@ import json
 from botocore.exceptions import ClientError
 
 from common import QUEUE_PAIRS, queue_attributes, require, sqs_client
+from iam_policies import provision_identities
 
 
 def ensure_queue(client, name, retention):
@@ -54,6 +55,7 @@ def main():
             })},
         )
         print(f"Provisioned {source_name} -> {dlq_name}", flush=True)
+    provision_identities()
     print("SQS provisioning completed.", flush=True)
 
 

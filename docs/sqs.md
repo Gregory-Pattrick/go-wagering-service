@@ -72,7 +72,9 @@ public local-development examples; see `.env.sqs.example`.
 
 The Go application does not receive administrative credentials.
 Dedicated producer, consumer and outbox-publisher identities and
-least-privilege policies are pending the next infrastructure step.
+least-privilege policies are provisioned automatically.
+See [SQS IAM Policies](sqs-iam.md) for verification and limitations.
+Runtime credential provisioning for the Go application remains pending.
 Successful denial tests for bad credentials do not demonstrate policy
 isolation between those future identities.
 

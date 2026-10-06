@@ -377,7 +377,12 @@ Provisioning is repeatable and preserves existing messages.
 Functional checks cover queue configuration, delivery, visibility,
 redelivery, deletion and transport deduplication.
 
-Dedicated producer and consumer IAM policies, the Go SQS adapter,
+Dedicated producer, consumer and outbox-publisher IAM identities and
+least-privilege policies are provisioned automatically.
+
+See [SQS IAM Policies](docs/sqs-iam.md) for permissions and verification.
+
+Runtime credentials for the Go application, the Go SQS adapter,
 financial consumers, inbox and outbox processing are not implemented yet.
 
 Administrative credentials are local provisioning fixtures and are not
