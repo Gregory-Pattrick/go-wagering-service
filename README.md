@@ -565,3 +565,9 @@ three APIs, two publishers and two consumers, race-instrumented Go processes,
 concurrent HTTP/SQS scenarios and a SQL accounting audit.
 Runtime results must be collected locally; generated test code is not evidence
 of a successful execution.
+
+## Controlled Process Recovery Tests
+
+See [recovery tests](docs/recovery-tests.md) for test-only fault barriers, actual
+SIGKILL scenarios, durable lease takeover, input redelivery and process restarts.
+The isolated suite records evidence only when executed locally.
