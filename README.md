@@ -27,8 +27,9 @@ unit tests and real-Keycloak integration tests. Their application to
 financial endpoints and idempotent replays is pending implementation of
 those business operations.
 
-Financial operations, financial schema migrations and SQS integration
-are not yet implemented.
+Financial domain rules, versioned schema, accounting constraints and SQL
+repositories are implemented. Financial HTTP routes and SQS runtime integration
+remain pending. See [Financial Persistence](docs/persistence.md) for validation.
 
 ## Prerequisites
 
@@ -282,7 +283,8 @@ This command builds the test image and starts PostgreSQL as a dependency.
 Integration tests verify database connectivity, the `wagering_app` role,
 its non-superuser status and connection pool shutdown.
 
-Financial tables and versioned migrations are not implemented yet.
+Financial migrations and their isolated integration suite are documented in
+[Financial Persistence](docs/persistence.md).
 
 ## Local Identity Provider
 
@@ -425,8 +427,8 @@ the version once. Rejected operations leave the original state unchanged.
 See [Wallet Aggregate](docs/wallet.md) for domain rules and the planned
 SQL transaction boundary.
 
-Wallet persistence, atomic ledger records and cross-process concurrency
-control will be implemented in subsequent steps.
+SQL persistence and wallet row locking are implemented. Three-process
+concurrency verification remains pending.
 
 ## Transaction Domain
 
@@ -454,8 +456,8 @@ balances. Invalid values and arithmetic overflow are rejected.
 
 See [Immutable Wallet Ledger](docs/ledger.md).
 
-Database immutability, duplicate protection and atomic persistence
-will be implemented and tested in subsequent steps.
+Database constraints, immutable ledger protection and atomic persistence
+are included in the financial persistence block.
 
 ## Financial Processing Rules
 
@@ -472,8 +474,8 @@ creating an entry. Business rejections preserve the wallet.
 
 See [External Financial Processing Rules](docs/processing.md).
 
-Decisions are currently evaluated in memory. Atomic persistence,
-distributed coordination, durable retries and events remain pending.
+The SQL adapter persists financial decisions atomically. HTTP integration,
+durable retry workers and distributed verification remain pending.
 
 ## Financial Domain Events
 
@@ -484,7 +486,28 @@ Envelopes include event identity, correlation, optional causation,
 UTC occurrence time, schema version and typed financial data.
 Internal OPENING events omit external provider metadata.
 
-Events preserve the original decision snapshot. Outbox persistence
-and broker publication will be implemented separately.
+Events preserve the original decision snapshot. Outbox persistence is
+implemented; broker publication remains pending.
 
 See [Typed Financial Events](docs/events.md).
+
+## Financial Database Block
+
+See [Financial Schema](docs/financial-schema.md),
+[Double-Entry Accounting](docs/accounting.md) and
+[Financial Persistence](docs/persistence.md).
+
+Apply the migrations:
+
+```powershell
+docker compose -f compose.yaml -f compose.finance.yaml --profile finance run --build --rm migrate
+```
+
+Run the isolated database suite with the race detector:
+
+```powershell
+docker compose -f compose.yaml -f compose.finance.yaml --profile financial-testing run --build --rm finance-tests
+```
+
+The test database is separate from the normal development database. The tests
+include destructive migration reversal only in that isolated database.

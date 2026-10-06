@@ -110,8 +110,8 @@ Planned PostgreSQL enforcement includes uniqueness of
 (wallet_id, transaction_id), immutable records and atomic persistence
 with wallet balances, transaction state and outbox records.
 
-The optional double-entry journal will be implemented separately,
-preserving one wallet ledger entry per financial movement.
+The double-entry journal is implemented in migration 002, preserving one
+wallet ledger entry per financial movement.
 
 ## Financial Decisions and Compensation Policy
 
@@ -154,3 +154,27 @@ Event construction alone does not provide persistent deduplication
 or delivery guarantees.
 
 See [Typed Financial Events](docs/events.md).
+
+## Implemented SQL Transaction Boundary
+
+The financial adapter uses pgx v5 with explicit SQL. Money is represented by
+BIGINT minor units and currency, with no float conversion. Store.Within owns
+one READ COMMITTED transaction shared by all Unit repository methods.
+
+Wallet writers use SELECT FOR UPDATE and version-checked updates. Immutable
+ledger entries form a versioned balance chain. Deferred database constraints
+require matching transaction state, ledger, result snapshots and outbox data.
+Every movement also requires a balanced, immutable two-posting journal.
+Clearing accounts have no shared mutable balance.
+
+Pending transactions require durable work rows. Terminal transitions remove
+that work. Inbox completion and outbox insertion can share the same financial
+commit. Migration and application database roles remain separate.
+
+The adapter classifies retryable SQL errors without automatically repeating
+callbacks. Unknown commit outcomes require lookup using the original identity.
+The application layer must supply bounded retries, authorization and transport
+idempotency handling. Background workers and HTTP financial routes remain pending.
+
+See [Financial Persistence](docs/persistence.md) for commands, implemented
+integration tests, timestamp precision and the current validation status.

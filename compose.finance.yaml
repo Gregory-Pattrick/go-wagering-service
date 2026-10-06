@@ -1,0 +1,44 @@
+# Use together with compose.yaml. The test database is isolated and ephemeral.
+services:
+  migrate:
+    profiles: ["finance"]
+    build:
+      context: .
+      target: test
+    entrypoint: ["go", "run", "./cmd/migrate"]
+    command: []
+    environment:
+      MIGRATION_DATABASE_URL: "postgres://wagering_migrator:wagering_migrator_local@postgres:5432/wagering?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  finance-postgres:
+    profiles: ["financial-testing"]
+    image: postgres:17.11-bookworm
+    environment:
+      POSTGRES_DB: wagering
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: finance_test_admin
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./deploy/postgres/001-bootstrap.sql:/docker-entrypoint-initdb.d/001-bootstrap.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wagering"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  finance-tests:
+    profiles: ["financial-testing"]
+    build:
+      context: .
+      target: test
+    environment:
+      FINANCE_TEST_MIGRATION_URL: "postgres://wagering_migrator:wagering_migrator_local@finance-postgres:5432/wagering?sslmode=disable"
+      FINANCE_TEST_DATABASE_URL: "postgres://wagering_app:wagering_app_local@finance-postgres:5432/wagering?sslmode=disable"
+    command: ["go", "test", "-tags=financialintegration", "-race", "-count=1", "./internal/adapters/postgres/finance"]
+    depends_on:
+      finance-postgres:
+        condition: service_healthy
