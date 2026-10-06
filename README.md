@@ -412,3 +412,18 @@ and detects arithmetic overflow. No monetary operation uses floating point.
 
 See [Money Value Object](docs/money.md) for the input contract, internal
 signed values and verification details.
+
+## Wallet Domain
+
+The wallet aggregate supports creation, rehydration and exact credit
+and debit operations. It validates currency compatibility, prevents
+negative balances and checks monetary and version overflow.
+
+Wallets start at version 1. Each successful balance change increments
+the version once. Rejected operations leave the original state unchanged.
+
+See [Wallet Aggregate](docs/wallet.md) for domain rules and the planned
+SQL transaction boundary.
+
+Wallet persistence, atomic ledger records and cross-process concurrency
+control will be implemented in subsequent steps.
