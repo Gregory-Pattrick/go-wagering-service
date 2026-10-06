@@ -557,3 +557,11 @@ metrics for the API, reference/outbox workers and SQS consumer. See
 stack command, loopback operations ports, metric meanings and outage tests.
 Telemetry is enabled by `OBSERVABILITY_ENABLED=true`; earlier base commands retain
 their previous behavior when that variable is absent.
+
+## Multi-process Correctness Tests
+
+See [distributed tests](docs/distributed-tests.md) for an isolated topology with
+three APIs, two publishers and two consumers, race-instrumented Go processes,
+concurrent HTTP/SQS scenarios and a SQL accounting audit.
+Runtime results must be collected locally; generated test code is not evidence
+of a successful execution.
