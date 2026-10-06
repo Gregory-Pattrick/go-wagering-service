@@ -23,13 +23,12 @@ token issuance. The Go HTTP server verifies access tokens before routing,
 except for public health checks.
 
 Actor authorization policies and provider ownership checks are covered by
-unit tests and real-Keycloak integration tests. Their application to
-financial endpoints and idempotent replays is pending implementation of
-those business operations.
+unit tests and real-Keycloak integration tests. Financial endpoints and idempotent replays now apply these policies
+before accessing provider-scoped records.
 
 Financial domain rules, versioned schema, accounting constraints and SQL
-repositories are implemented. Financial HTTP routes and SQS runtime integration
-remain pending. See [Financial Persistence](docs/persistence.md) for validation.
+repositories are implemented. Financial HTTP routes and persistent replay are implemented. SQS runtime
+integration remains pending. See [Financial Persistence](docs/persistence.md) for validation.
 
 ## Prerequisites
 
@@ -427,8 +426,8 @@ the version once. Rejected operations leave the original state unchanged.
 See [Wallet Aggregate](docs/wallet.md) for domain rules and the planned
 SQL transaction boundary.
 
-SQL persistence and wallet row locking are implemented. Three-process
-concurrency verification remains pending.
+SQL persistence, authenticated wallet routes and wallet row locking are
+implemented. Three-process concurrency verification remains pending.
 
 ## Transaction Domain
 
@@ -440,8 +439,8 @@ The domain enforces lifecycle transitions and terminal-state protection.
 Financial result snapshots preserve the original balance and wallet
 version for future persisted replays.
 
-Canonical business payloads are hashed with SHA-256. Database-backed
-idempotency and financial processing will be implemented separately.
+Canonical business payloads are hashed with SHA-256. The shared application
+service now implements database-backed idempotency and financial processing.
 
 See [Transaction Identity and Lifecycle](docs/transactions.md).
 
@@ -474,8 +473,8 @@ creating an entry. Business rejections preserve the wallet.
 
 See [External Financial Processing Rules](docs/processing.md).
 
-The SQL adapter persists financial decisions atomically. HTTP integration,
-durable retry workers and distributed verification remain pending.
+The HTTP API and SQL adapter persist financial decisions atomically.
+Durable retry workers and distributed verification remain pending.
 
 ## Financial Domain Events
 
@@ -511,3 +510,28 @@ docker compose -f compose.yaml -f compose.finance.yaml --profile financial-testi
 
 The test database is separate from the normal development database. The tests
 include destructive migration reversal only in that isolated database.
+
+## Financial HTTP API
+
+Wallet creation, wallet/ledger queries, wagering submissions, transaction queries
+and reconciliation are available through authenticated routes. Financial replay
+returns the original stored result without applying another movement.
+
+See [Financial HTTP API](docs/financial-api.md) for exact routes, request limits,
+status codes, idempotency policy, pagination and remaining work.
+
+Run the real PostgreSQL and Keycloak API suite separately from finance-tests:
+
+```powershell
+docker compose -f compose.yaml -f compose.finance.yaml -f compose.api.yaml --profile financial-testing --profile api-testing run --build --rm api-tests
+```
+
+Rebuild the normal service and run the PowerShell smoke script:
+
+```powershell
+docker compose up --build -d --wait --wait-timeout 180 app
+.\scripts\smoke-api.ps1
+```
+
+Pending references and outbox events are durable, but their background workers
+are not yet implemented. Broker readiness and full observability remain pending.

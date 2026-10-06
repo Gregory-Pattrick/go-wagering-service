@@ -1,0 +1,20 @@
+# Combine with compose.yaml and compose.finance.yaml.
+services:
+  api-tests:
+    profiles: ["api-testing"]
+    build:
+      context: .
+      target: test
+    environment:
+      FINANCE_TEST_MIGRATION_URL: "postgres://wagering_migrator:wagering_migrator_local@finance-postgres:5432/wagering?sslmode=disable"
+      FINANCE_TEST_DATABASE_URL: "postgres://wagering_app:wagering_app_local@finance-postgres:5432/wagering?sslmode=disable"
+      KEYCLOAK_TOKEN_URL: "http://keycloak:8080/realms/wagering/protocol/openid-connect/token"
+      OIDC_ISSUER: "http://localhost:8081/realms/wagering"
+      OIDC_AUDIENCE: "wagering-api"
+      OIDC_JWKS_URL: "http://keycloak:8080/realms/wagering/protocol/openid-connect/certs"
+    command: ["go", "test", "-tags=apiintegration", "-race", "-count=1", "./internal/adapters/http"]
+    depends_on:
+      finance-postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy

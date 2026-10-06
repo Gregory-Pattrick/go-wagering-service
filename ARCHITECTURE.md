@@ -38,9 +38,9 @@ The configured issuer is `http://localhost:8081/realms/wagering`.
 Container networking may require a separate trusted internal JWKS URL;
 this must not disable issuer validation.
 
-Provider clients will be restricted to submitting and reading their own
-transactions. Authorization must also run before returning idempotent
-replays. Wallet endpoints will require the internal service identity.
+Provider clients submit and read only their own transactions. Authorization
+runs before returning idempotent replays. Wallet endpoints require the
+internal service identity.
 
 Unrecognized identities and unsupported actor types are denied.
 The actor-policy middleware and provider-ownership guard are tested, but
@@ -174,7 +174,31 @@ commit. Migration and application database roles remain separate.
 The adapter classifies retryable SQL errors without automatically repeating
 callbacks. Unknown commit outcomes require lookup using the original identity.
 The application layer must supply bounded retries, authorization and transport
-idempotency handling. Background workers and HTTP financial routes remain pending.
+idempotency handling. HTTP financial routes are now integrated; background workers remain pending.
 
 See [Financial Persistence](docs/persistence.md) for commands, implemented
 integration tests, timestamp precision and the current validation status.
+
+## Shared Financial Application Service
+
+internal/application/financial defines use cases and narrow persistence ports.
+The PostgreSQL adapter implements those ports; the application does not import
+pgx or HTTP. Fx composes the service and HTTP routes, resolving the database pool
+only after lifecycle startup when a use case is invoked.
+
+Provider authorization precedes persistent identity lookup. Identity insertion
+occurs before wallet locking. Unique collisions are resolved by provider-scoped
+key/hash comparison and external-ID policy. Replays return immutable original
+results without new financial records. Only deadlock/serialization failures
+receive bounded whole-transaction retry; ambiguous commit results require the
+caller to reuse the same identity.
+
+The HTTP adapter enforces strict bounded JSON and canonical UUID normalization.
+Queries by internal transaction ID include provider filtering. Ledger cursors
+bind a wallet and an upper version; reconciliation reads wallet and ledger in a
+single SQL snapshot and records detected mismatches without repairing balances.
+
+The same financial use case will be integrated with the SQS consumer. Pending
+reference scheduling is persisted, but its retry worker and the outbox publisher
+are not part of this block. The API integration suite uses real PostgreSQL and
+Keycloak; separate handler/pool tests do not replace the three-process proof.
