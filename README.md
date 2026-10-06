@@ -442,3 +442,17 @@ Canonical business payloads are hashed with SHA-256. Database-backed
 idempotency and financial processing will be implemented separately.
 
 See [Transaction Identity and Lifecycle](docs/transactions.md).
+
+## Wallet Ledger Domain
+
+Immutable ledger entries record each movement's direction, amount,
+balance before and balance after.
+
+Construction and rehydration enforce exact balance equations,
+compatible currencies, positive movement amounts and nonnegative
+balances. Invalid values and arithmetic overflow are rejected.
+
+See [Immutable Wallet Ledger](docs/ledger.md).
+
+Database immutability, duplicate protection and atomic persistence
+will be implemented and tested in subsequent steps.

@@ -92,3 +92,23 @@ require application rules and PostgreSQL transactions.
 
 See [Transaction Identity and Lifecycle](docs/transactions.md) for
 the complete state machine, hash contract and failure codes.
+
+## Wallet Ledger Invariants
+
+Each wallet ledger entry represents one positive financial movement.
+Its balance equation is validated using exact Money arithmetic.
+
+Entries expose no mutation methods. Corrections require new
+compensating transactions and entries. Rehydration validates stored
+data without applying another movement.
+
+The processing service must ensure that only eligible financial
+operations produce entries. LOSS, rejected operations and zero-balance
+wallet creation produce no ledger entry.
+
+Planned PostgreSQL enforcement includes uniqueness of
+(wallet_id, transaction_id), immutable records and atomic persistence
+with wallet balances, transaction state and outbox records.
+
+The optional double-entry journal will be implemented separately,
+preserving one wallet ledger entry per financial movement.
