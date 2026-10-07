@@ -1,0 +1,12 @@
+# Benchmark image: normal builds, without race instrumentation.
+FROM golang:1.27.1-bookworm
+WORKDIR /app
+ENV GOTOOLCHAIN=local CGO_ENABLED=0
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+COPY . .
+RUN go build -trimpath -buildvcs=false -o /out/service ./cmd/service && \
+    go build -trimpath -buildvcs=false -o /out/workers ./cmd/workers && \
+    go build -trimpath -buildvcs=false -o /out/consumer ./cmd/consumer
+USER 65532:65532
+ENTRYPOINT ["/out/service"]
