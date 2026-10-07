@@ -595,3 +595,18 @@ verifies measurable outbox backlog and resumes workers before checking drain.
 Open http://127.0.0.1:3000/d/wagering-operations after completion.
 See [Operational dashboards](docs/dashboards.md) for prerequisites, local
 credentials, PowerShell instructions and metric interpretation.
+
+## HTTP Performance Measurements
+
+An isolated k6 workload measures multiple wallets, a contended wallet and
+idempotent replays with three API processes and two publishers. It uses normal
+Go builds, records latency/throughput/errors/outbox samples and requires
+post-load reconciliation and SQL accounting audits.
+
+```powershell
+& ([scriptblock]::Create((Get-Content -Raw -LiteralPath ".\scripts\test-performance.ps1")))
+```
+
+See [Performance methodology](docs/PERFORMANCE.md). Results are generated under
+`test-results/performance-<timestamp>` only when executed. This HTTP block does
+not yet measure SQS offered load or asynchronous end-to-end latency.
