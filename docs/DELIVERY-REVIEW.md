@@ -1,5 +1,32 @@
 # Delivery review — 2026-10-07
 
+## Final disposition - 2026-10-07
+
+This section supersedes the historical pending statuses below.
+See [final validation evidence](evidence/final-validation.md).
+
+Tested code revision: 0304031843d4be778551cd307830232ed2bb2221.
+Evidence documentation commit: 2a4db2f.
+
+| Finding | Disposition | Evidence |
+| --- | --- | --- |
+| R1 - Broker authentication | Addressed for the supported local protocol | Author reported successful Docker signature/IAM/restart checks after the Dockerfile import-path correction. Go distributed regression also passed. This does not establish production security certification. |
+| R2 - Complete startup | Validated | Fresh checkout with new volumes passed migrations, readiness and authenticated HTTP/SQS smoke. |
+| R3 - Operation identifiers | Validated | Supplied HTTP, consumer and outbox logs include available identifiers. The same transaction ID links SQS processing, HTTP replay and event publication. |
+| R4 - Fifty duplicates | Validated | Final distributed output confirms fifty concurrent requests across three APIs and immutable replay, followed by SQL audits. |
+| R5 - Documentation | Updated | README, architecture and component documentation were aligned with implemented behavior. Earlier review sections are retained as history. |
+| R6 - Evidence and fresh checkout | Addressed within the documented scope | Historical reports retain original revisions and dirty-file metadata; final regression and fresh-checkout results are recorded separately. |
+
+Historical performance reports do not measure the final signature-validating
+revision. No new final-revision performance claim is made.
+
+Final evaluator repository access must still be confirmed by the author.
+The checklist's original pending entries should be reconciled with the
+recorded evidence; they are not evidence of failed tests.
+
+---
+
+
 ## Scope and evidence
 
 Reviewed the supplied `go-wagering-service-final-review.zip` against the original
