@@ -610,3 +610,17 @@ post-load reconciliation and SQL accounting audits.
 See [Performance methodology](docs/PERFORMANCE.md). Results are generated under
 `test-results/performance-<timestamp>` only when executed. This HTTP block does
 not yet measure SQS offered load or asynchronous end-to-end latency.
+
+## SQS Performance Measurements
+
+After the HTTP performance block, run the isolated SQS workload:
+
+```powershell
+& ([scriptblock]::Create((Get-Content -Raw -LiteralPath ".\scripts\test-sqs-performance.ps1")))
+```
+
+The Go producer separates SDK send time from observed financial completion and
+verifies duplicate-envelope inbox completion and post-load wallet reconciliation.
+A separate case pauses both output publishers and verifies durable backlog and
+recovery. See [SQS performance methodology](docs/SQS-PERFORMANCE.md) for timing
+limits and the generated evidence required before reporting measured results.

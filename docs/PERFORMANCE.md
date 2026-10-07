@@ -127,3 +127,11 @@ References:
 - https://grafana.com/docs/k6/latest/using-k6/scenarios/executors/constant-arrival-rate/
 - https://grafana.com/docs/k6/latest/using-k6/test-lifecycle/
 - https://grafana.com/docs/k6/latest/results-output/end-of-test/custom-summary/
+
+## SQS workload companion
+
+[SQS performance methodology](SQS-PERFORMANCE.md) adds a Go producer with separate
+send and observed terminal latency, distinct envelopes for application duplicates,
+exact inbox completion audits and a controlled output-publication pause. Its
+measured evidence is generated separately from the HTTP report; it does not
+retroactively change the scope or results of an earlier HTTP run.
