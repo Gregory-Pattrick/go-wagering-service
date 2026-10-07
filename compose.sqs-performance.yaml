@@ -1,0 +1,480 @@
+# Standalone SQS benchmark; use its dedicated controller.
+name: wagering-sqs-performance
+services:
+  postgres:
+    image: postgres:17.11-bookworm
+    environment:
+      POSTGRES_DB: wagering
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-postgres_local}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=trust
+    volumes:
+    - postgres_data:/var/lib/postgresql/data
+    - ./deploy/postgres/001-bootstrap.sql:/docker-entrypoint-initdb.d/001-bootstrap.sql:ro
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U postgres -d wagering
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    stop_grace_period: 30s
+    cpus: 2.0
+    mem_limit: 1g
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.0
+    command:
+    - start-dev
+    - --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin_local}
+      KC_DB: dev-file
+      KC_HOSTNAME: http://localhost:8081
+      KC_HEALTH_ENABLED: 'true'
+    volumes:
+    - ./deploy/keycloak/wagering-realm.json:/opt/keycloak/data/import/wagering-realm.json:ro
+    healthcheck:
+      test:
+      - CMD
+      - /bin/bash
+      - -ec
+      - '{ printf ''HEAD /health/ready HTTP/1.0\r\n\r\n'' >&0; grep -q ''HTTP/1.0
+        200''; } 0<>/dev/tcp/localhost/9000'
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    stop_grace_period: 30s
+    cpus: 2.0
+    mem_limit: 1g
+  ministack:
+    image: ministackorg/ministack:1.5.21
+    environment:
+      AUTH: 'true'
+      AWS_ACCESS_KEY_ID: ${SQS_ADMIN_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${SQS_ADMIN_SECRET_ACCESS_KEY:-sqs_admin_local}
+      AWS_DEFAULT_REGION: us-east-1
+      MINISTACK_REGION: us-east-1
+      MINISTACK_ACCOUNT_ID: '000000000000'
+      MINISTACK_HOST: ministack
+      PERSIST_STATE: '1'
+      STATE_DIR: /data/state
+    volumes:
+    - ministack_data:/data
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://localhost:4566/_ministack/health',
+        timeout=3).close()
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    stop_grace_period: 60s
+    cpus: 2.0
+    mem_limit: 1g
+  sqs-init:
+    image: ministackorg/ministack:1.5.21
+    entrypoint:
+    - python
+    command:
+    - /scripts/bootstrap.py
+    environment:
+      AWS_ACCESS_KEY_ID: ${SQS_ADMIN_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${SQS_ADMIN_SECRET_ACCESS_KEY:-sqs_admin_local}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://ministack:4566
+      AWS_EC2_METADATA_DISABLED: 'true'
+    volumes:
+    - ./deploy/sqs:/scripts:ro
+    depends_on:
+      ministack:
+        condition: service_healthy
+    restart: 'no'
+  publisher-init:
+    image: ministackorg/ministack:1.5.21
+    entrypoint:
+    - python
+    - /scripts/publisher_credentials.py
+    environment:
+      AWS_ACCESS_KEY_ID: ${SQS_ADMIN_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${SQS_ADMIN_SECRET_ACCESS_KEY:-sqs_admin_local}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://ministack:4566
+      AWS_EC2_METADATA_DISABLED: 'true'
+    volumes:
+    - ./deploy/sqs:/scripts:ro
+    - publisher_credentials:/credentials
+    depends_on:
+      sqs-init:
+        condition: service_completed_successfully
+    restart: 'no'
+  migrate:
+    build:
+      context: .
+      target: test
+    entrypoint:
+    - go
+    - run
+    - ./cmd/migrate
+    command: []
+    environment:
+      MIGRATION_DATABASE_URL: postgres://wagering_migrator:wagering_migrator_local@postgres:5432/wagering?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+  api-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.sqs-performance
+    image: go-wagering-service:sqs-performance
+    environment:
+      HTTP_ADDR: 0.0.0.0:8080
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgres://wagering_app:wagering_app_local@postgres:5432/wagering?sslmode=disable
+      OIDC_ISSUER: http://localhost:8081/realms/wagering
+      OIDC_AUDIENCE: wagering-api
+      OIDC_JWKS_URL: http://keycloak:8080/realms/wagering/protocol/openid-connect/certs
+      OIDC_PROVIDER_CLIENTS: '{"provider-a":"provider-a","provider-b":"provider-b"}'
+      OIDC_INTERNAL_CLIENT: wallet-service
+      OBSERVABILITY_ENABLED: 'true'
+      TRACING_ENABLED: 'false'
+      OPS_ADDR: 0.0.0.0:9090
+      AWS_REGION: us-east-1
+      SQS_ENDPOINT: http://ministack:4566
+      MONITOR_CREDENTIALS_FILE: /monitor/monitor.json
+      MONITOR_QUEUES: '{"input":"http://ministack:4566/000000000000/wager-transactions.fifo","output":"http://ministack:4566/000000000000/wager-events.fifo","input_dlq":"http://ministack:4566/000000000000/wager-transactions-dlq.fifo"}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      sqs-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      monitor-init:
+        condition: service_completed_successfully
+    stop_grace_period: 20s
+    entrypoint:
+    - /out/service
+    restart: 'no'
+    cpus: 1.0
+    mem_limit: 512m
+    volumes:
+    - monitor_credentials:/monitor:ro
+  api-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.sqs-performance
+    image: go-wagering-service:sqs-performance
+    environment:
+      HTTP_ADDR: 0.0.0.0:8080
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgres://wagering_app:wagering_app_local@postgres:5432/wagering?sslmode=disable
+      OIDC_ISSUER: http://localhost:8081/realms/wagering
+      OIDC_AUDIENCE: wagering-api
+      OIDC_JWKS_URL: http://keycloak:8080/realms/wagering/protocol/openid-connect/certs
+      OIDC_PROVIDER_CLIENTS: '{"provider-a":"provider-a","provider-b":"provider-b"}'
+      OIDC_INTERNAL_CLIENT: wallet-service
+      OBSERVABILITY_ENABLED: 'true'
+      TRACING_ENABLED: 'false'
+      OPS_ADDR: 0.0.0.0:9090
+      AWS_REGION: us-east-1
+      SQS_ENDPOINT: http://ministack:4566
+      MONITOR_CREDENTIALS_FILE: /monitor/monitor.json
+      MONITOR_QUEUES: '{"input":"http://ministack:4566/000000000000/wager-transactions.fifo","output":"http://ministack:4566/000000000000/wager-events.fifo","input_dlq":"http://ministack:4566/000000000000/wager-transactions-dlq.fifo"}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      sqs-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      monitor-init:
+        condition: service_completed_successfully
+    stop_grace_period: 20s
+    entrypoint:
+    - /out/service
+    restart: 'no'
+    cpus: 1.0
+    mem_limit: 512m
+    volumes:
+    - monitor_credentials:/monitor:ro
+  api-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.sqs-performance
+    image: go-wagering-service:sqs-performance
+    environment:
+      HTTP_ADDR: 0.0.0.0:8080
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgres://wagering_app:wagering_app_local@postgres:5432/wagering?sslmode=disable
+      OIDC_ISSUER: http://localhost:8081/realms/wagering
+      OIDC_AUDIENCE: wagering-api
+      OIDC_JWKS_URL: http://keycloak:8080/realms/wagering/protocol/openid-connect/certs
+      OIDC_PROVIDER_CLIENTS: '{"provider-a":"provider-a","provider-b":"provider-b"}'
+      OIDC_INTERNAL_CLIENT: wallet-service
+      OBSERVABILITY_ENABLED: 'true'
+      TRACING_ENABLED: 'false'
+      OPS_ADDR: 0.0.0.0:9090
+      AWS_REGION: us-east-1
+      SQS_ENDPOINT: http://ministack:4566
+      MONITOR_CREDENTIALS_FILE: /monitor/monitor.json
+      MONITOR_QUEUES: '{"input":"http://ministack:4566/000000000000/wager-transactions.fifo","output":"http://ministack:4566/000000000000/wager-events.fifo","input_dlq":"http://ministack:4566/000000000000/wager-transactions-dlq.fifo"}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      sqs-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      monitor-init:
+        condition: service_completed_successfully
+    stop_grace_period: 20s
+    entrypoint:
+    - /out/service
+    restart: 'no'
+    cpus: 1.0
+    mem_limit: 512m
+    volumes:
+    - monitor_credentials:/monitor:ro
+  publisher-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.sqs-performance
+    image: go-wagering-service:sqs-performance
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgres://wagering_app:wagering_app_local@postgres:5432/wagering?sslmode=disable
+      AWS_REGION: us-east-1
+      SQS_ENDPOINT: http://ministack:4566
+      SQS_EVENTS_QUEUE_URL: http://ministack:4566/000000000000/wager-events.fifo
+      SQS_PUBLISHER_CREDENTIALS_FILE: /credentials/publisher.json
+      WORKER_POLL_INTERVAL: 500ms
+      WORKER_LEASE: 30s
+      WORKER_OPERATION_TIMEOUT: 10s
+      WORKER_RETRY_BASE: 1s
+      WORKER_RETRY_CAP: 60s
+      REFERENCE_TTL: 15m
+      OBSERVABILITY_ENABLED: 'false'
+      TRACING_ENABLED: 'false'
+    volumes:
+    - publisher_credentials:/credentials:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      publisher-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 20s
+    restart: 'no'
+    entrypoint:
+    - /out/workers
+    cpus: 1.0
+    mem_limit: 512m
+  publisher-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.sqs-performance
+    image: go-wagering-service:sqs-performance
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgres://wagering_app:wagering_app_local@postgres:5432/wagering?sslmode=disable
+      AWS_REGION: us-east-1
+      SQS_ENDPOINT: http://ministack:4566
+      SQS_EVENTS_QUEUE_URL: http://ministack:4566/000000000000/wager-events.fifo
+      SQS_PUBLISHER_CREDENTIALS_FILE: /credentials/publisher.json
+      WORKER_POLL_INTERVAL: 500ms
+      WORKER_LEASE: 30s
+      WORKER_OPERATION_TIMEOUT: 10s
+      WORKER_RETRY_BASE: 1s
+      WORKER_RETRY_CAP: 60s
+      REFERENCE_TTL: 15m
+      OBSERVABILITY_ENABLED: 'false'
+      TRACING_ENABLED: 'false'
+    volumes:
+    - publisher_credentials:/credentials:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      publisher-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 20s
+    restart: 'no'
+    entrypoint:
+    - /out/workers
+    cpus: 1.0
+    mem_limit: 512m
+  monitor-init:
+    image: ministackorg/ministack:1.5.21
+    entrypoint:
+    - python
+    - /scripts/monitor_credentials.py
+    environment:
+      AWS_ACCESS_KEY_ID: ${SQS_ADMIN_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${SQS_ADMIN_SECRET_ACCESS_KEY:-sqs_admin_local}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://ministack:4566
+      AWS_EC2_METADATA_DISABLED: 'true'
+    volumes:
+    - ./deploy/sqs:/scripts:ro
+    - monitor_credentials:/credentials
+    depends_on:
+      sqs-init:
+        condition: service_completed_successfully
+    restart: 'no'
+  load:
+    image: go-wagering-service:sqs-performance
+    build:
+      context: .
+      dockerfile: Dockerfile.sqs-performance
+    user: 0:0
+    entrypoint:
+    - /out/load-sqs
+    environment:
+      SQS_LOAD_CASE: ${SQS_LOAD_CASE:-many}
+      SQS_LOAD_PHASE: ${SQS_LOAD_PHASE:-measure}
+      SQS_LOAD_SECONDS: ${SQS_LOAD_SECONDS:-120}
+      SQS_LOAD_RATE: ${SQS_LOAD_RATE:-20}
+      WALLET_CLIENT_SECRET: ${WALLET_CLIENT_SECRET:-wallet-service-local-secret}
+      PROVIDER_A_CLIENT_SECRET: ${PROVIDER_A_CLIENT_SECRET:-provider-a-local-secret}
+    volumes:
+    - producer_credentials:/credentials:ro
+    - ${SQS_PERF_RESULTS_PATH:?Run scripts/test-sqs-performance.ps1 first}:/results
+    cpus: 2.0
+    mem_limit: 512m
+  tools:
+    image: ministackorg/ministack:1.5.21
+    entrypoint:
+    - python
+    - /suite/sqs_observe.py
+    volumes:
+    - ./deploy/performance:/suite:ro
+    - ${SQS_PERF_RESULTS_PATH:?Run scripts/test-sqs-performance.ps1 first}:/results
+  sampler:
+    image: ministackorg/ministack:1.5.21
+    entrypoint:
+    - python
+    - /suite/sqs_observe.py
+    volumes:
+    - ./deploy/performance:/suite:ro
+    - ${SQS_PERF_RESULTS_PATH:?Run scripts/test-sqs-performance.ps1 first}:/results
+    command:
+    - sample
+  audit:
+    image: postgres:17.11-bookworm
+    entrypoint:
+    - psql
+    - -h
+    - postgres
+    - -U
+    - postgres
+    - -d
+    - wagering
+    - -v
+    - ON_ERROR_STOP=1
+    - -f
+    - /suite/audit.sql
+    environment:
+      PGPASSWORD: ${POSTGRES_ADMIN_PASSWORD:-postgres_local}
+    volumes:
+    - ./deploy/performance:/suite:ro
+    - ${SQS_PERF_RESULTS_PATH:?Run scripts/test-sqs-performance.ps1 first}:/results
+  ingress-init:
+    image: ministackorg/ministack:1.5.21
+    entrypoint:
+    - python
+    - /scripts/ingress_credentials.py
+    environment:
+      AWS_ACCESS_KEY_ID: ${SQS_ADMIN_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${SQS_ADMIN_SECRET_ACCESS_KEY:-sqs_admin_local}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://ministack:4566
+      AWS_EC2_METADATA_DISABLED: 'true'
+    volumes:
+    - ./deploy/sqs:/scripts:ro
+    - consumer_credentials:/consumer_credentials
+    - producer_credentials:/producer_credentials
+    depends_on:
+      sqs-init:
+        condition: service_completed_successfully
+    restart: 'no'
+  ingress-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.sqs-performance
+    image: go-wagering-service:sqs-performance
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgres://wagering_app:wagering_app_local@postgres:5432/wagering?sslmode=disable
+      AWS_REGION: us-east-1
+      SQS_ENDPOINT: http://ministack:4566
+      SQS_INPUT_QUEUE_URL: http://ministack:4566/000000000000/wager-transactions.fifo
+      SQS_CONSUMER_CREDENTIALS_FILE: /credentials/consumer.json
+      SQS_ALLOWED_PROVIDERS: provider-a,provider-b
+      OBSERVABILITY_ENABLED: 'false'
+      TRACING_ENABLED: 'false'
+    volumes:
+    - consumer_credentials:/credentials:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ingress-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 20s
+    restart: 'no'
+    entrypoint:
+    - /out/consumer
+    cpus: 1.0
+    mem_limit: 512m
+  ingress-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.sqs-performance
+    image: go-wagering-service:sqs-performance
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgres://wagering_app:wagering_app_local@postgres:5432/wagering?sslmode=disable
+      AWS_REGION: us-east-1
+      SQS_ENDPOINT: http://ministack:4566
+      SQS_INPUT_QUEUE_URL: http://ministack:4566/000000000000/wager-transactions.fifo
+      SQS_CONSUMER_CREDENTIALS_FILE: /credentials/consumer.json
+      SQS_ALLOWED_PROVIDERS: provider-a,provider-b
+      OBSERVABILITY_ENABLED: 'false'
+      TRACING_ENABLED: 'false'
+    volumes:
+    - consumer_credentials:/credentials:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ingress-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 20s
+    restart: 'no'
+    entrypoint:
+    - /out/consumer
+    cpus: 1.0
+    mem_limit: 512m
+volumes:
+  postgres_data: null
+  ministack_data: null
+  publisher_credentials: null
+  monitor_credentials: null
+  consumer_credentials: null
+  producer_credentials: null
