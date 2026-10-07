@@ -3,6 +3,7 @@ package workers
 import (
 	"context"
 	"errors"
+	"github.com/Gregory-Pattrick/go-wagering-service/internal/operationlog"
 	"log/slog"
 	"sync"
 	"time"
@@ -56,6 +57,7 @@ func (r *Runner) PublishOne(ctx context.Context) (bool, error) {
 	if err = backend.ConfirmEvent(ctx, event); err != nil {
 		return true, err
 	}
+	operationlog.Published(ctx, r.logger, event.ID, event.Payload)
 	r.logger.InfoContext(ctx, "outbox event published", "event_id", event.ID, "attempt", event.Attempts)
 	return true, nil
 }

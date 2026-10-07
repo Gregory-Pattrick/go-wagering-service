@@ -40,7 +40,7 @@ func (h *RequestHandler) WithTracer(t financial.TracePort) delivery.Handler {
 			return nil, e
 		}
 		return financial.TraceInbox(b, t), nil
-	}, providerNames(h.providers))
+	}, providerNames(h.providers), h.logger)
 }
 func providerNames(providers map[string]bool) []string {
 	names := make([]string, 0, len(providers))

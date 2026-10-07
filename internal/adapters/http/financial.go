@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Gregory-Pattrick/go-wagering-service/internal/operationlog"
 	"io"
 	"log/slog"
 	"mime"
@@ -230,6 +231,7 @@ func (a *FinancialAPI) open(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	operationlog.Write(r.Context(), a.logger, operationlog.Record{Transport: "http", CorrelationID: metadata(r).CorrelationID, WalletID: result.ID, Status: "OPENED"})
 	w.Header().Set("Location", "/wallets/"+result.ID)
 	return respond(w, 201, result)
 }
@@ -268,6 +270,7 @@ func (a *FinancialAPI) submit(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	operationlog.Write(r.Context(), a.logger, operationlog.Record{Transport: "http", CorrelationID: metadata(r).CorrelationID, TransactionID: result.TransactionID, WalletID: fields["walletId"], ProviderID: principal(r).ProviderID(), Status: string(result.Status), FailureCode: string(result.FailureCode), Replay: result.IdempotentReplay})
 	status := 200
 	switch result.Status {
 	case tx.Pending, tx.PendingReference:

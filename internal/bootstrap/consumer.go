@@ -35,6 +35,6 @@ func newRequestConsumer(lifecycle fx.Lifecycle, database *postgres.Database, que
 			return nil, err
 		}
 		return finance.New(pool), nil
-	}, c.Providers)
+	}, c.Providers, logger)
 	return workers.NewConsumer(queue, handler, logger)
 }

@@ -63,6 +63,6 @@ func consumer(lifecycle fx.Lifecycle, db *postgres.Database, queue *sqs.InputQue
 			return nil, err
 		}
 		return finance.New(pool), nil
-	}, cfg.Providers)
+	}, cfg.Providers, logger)
 	workers.RegisterConsumer(lifecycle, workers.NewConsumer(crashprobe.Queue{Queue: queue, Probe: probe}, handler, logger))
 }

@@ -6,7 +6,7 @@ import (
 )
 
 func (h *RequestHandler) WithObserver(observer financial.Observer) delivery.Handler {
-	return &RequestHandler{providers: h.providers, source: func() (financial.InboxBackend, error) {
+	return &RequestHandler{providers: h.providers, logger: h.logger, source: func() (financial.InboxBackend, error) {
 		backend, err := h.source()
 		if err != nil {
 			return nil, err
