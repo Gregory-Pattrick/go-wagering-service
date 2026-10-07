@@ -1,5 +1,11 @@
 # SQS IAM Policies
 
+> Broker authentication update: the project now includes a custom signature gate
+> in `Dockerfile.broker`. Statements below about missing SigV4 validation describe
+> the unmodified upstream MiniStack image. See [broker authentication](broker-authentication.md)
+> for the supported protocol, verification commands and pending runtime checks.
+
+
 ## Identities
 
 Provisioning creates three IAM users under `/wagering/` and attaches one

@@ -73,3 +73,11 @@ The load reports describe offered workloads, not maximum system capacity. SQS
 terminal observation includes polling delay. The observed many-wallet SQS p99
 was approximately 6.55 seconds; the supplied summaries do not identify its cause.
 No 100% completion percentage or guaranteed evaluator score follows from this review.
+
+## R1 remediation candidate
+
+The broker-authentication block adds a pinned local signature gate and isolated
+verification workflow; see [broker authentication](broker-authentication.md).
+Preparation-time Python and real HTTP checks passed, including the previously
+failing wrong-secret test. Close R1 only after Docker security checks and Go
+consumer/publisher regression checks succeed on the delivery environment.

@@ -1,5 +1,11 @@
 # Go Wagering Service
 
+> Broker authentication update: the project now includes a custom signature gate
+> in `Dockerfile.broker`. Statements below about missing SigV4 validation describe
+> the unmodified upstream MiniStack image. See [broker authentication](docs/broker-authentication.md)
+> for the supported protocol, verification commands and pending runtime checks.
+
+
 Go backend for a wagering service, currently under development.
 
 ## Current Status

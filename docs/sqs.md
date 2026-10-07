@@ -1,5 +1,11 @@
 # Local SQS Infrastructure
 
+> Broker authentication update: the project now includes a custom signature gate
+> in `Dockerfile.broker`. Statements below about missing SigV4 validation describe
+> the unmodified upstream MiniStack image. See [broker authentication](broker-authentication.md)
+> for the supported protocol, verification commands and pending runtime checks.
+
+
 ## Scope
 
 MiniStack 1.5.21 emulates the AWS SQS API locally. The Go application will use
