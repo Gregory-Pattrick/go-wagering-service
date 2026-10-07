@@ -88,3 +88,30 @@ concurrency, recovery, integration and race-detector tests.
 - https://prometheus.io/docs/prometheus/latest/command-line/promtool/
 - https://grafana.com/docs/grafana/latest/administration/provisioning/
 - https://prometheus.io/download/?trk=direct
+
+## Optimization-safe smoke checks
+
+The smoke uses explicit runtime checks instead of Python `assert`. Python may
+remove assertions, including function calls inside them, when optimization is
+enabled. The original smoke placed financial requests inside assertions; that
+could skip the WIN and conflict requests. The uploaded revision moved the WIN
+outside the assertion, but still allowed other validations to disappear.
+
+`test_check.py` uses deterministic fixtures to verify that all five submissions
+per wallet execute at optimization levels 0, 1 and 2, and that invalid conflict
+responses and missing WIN effects fail at every level. These offline checks do
+not replace the actual PostgreSQL/SQS/Grafana smoke. The script runs both.
+
+The controller is wrapped in one PowerShell script block so that pasting its
+complete contents does not execute a standalone final PASS after a terminating
+failure. Prefer running the complete file as one unit. For the existing local
+PowerShell setup:
+
+```powershell
+& ([scriptblock]::Create((Get-Content -Raw -LiteralPath ".\scripts\test-dashboards.ps1")))
+```
+
+The smoke prints `Python optimization level` for runtime evidence. The first
+historical balance mismatch cannot be conclusively attributed to optimization
+without the original runtime/state evidence; offline reproduction establishes
+that the old test had this failure mode. No financial expectation was relaxed.

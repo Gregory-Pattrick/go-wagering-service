@@ -14,6 +14,11 @@ sys.path.insert(0, '/distributed')
 from run import access_token, opened, operation, submit, verify_wallet, wait, request, BASES
 
 
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+
+
 def get(url, auth=False):
     req = urllib.request.Request(url)
     if auth:
@@ -25,7 +30,7 @@ def get(url, auth=False):
 
 def query(expression):
     result = get('http://prometheus:9090/api/v1/query?' + urllib.parse.urlencode({'query': expression}))
-    assert result['status'] == 'success', result
+    require(result['status'] == 'success', 'Prometheus query failed: ' + str(result))
     return result['data']['result']
 
 
@@ -50,24 +55,27 @@ def traffic():
         bet = operation(player, wallet)
 
         code, first = submit(0, provider, bet)
-        assert code == 200 and first['status'] == 'PROCESSED'
+        require(code == 200 and first['status'] == 'PROCESSED', 'BET failed: ' + str(first))
 
         code, replay = submit(0, provider, bet)
-        assert code == 200 and replay['idempotentReplay']
-        assert replay['transactionId'] == first['transactionId']
+        require(code == 200 and replay['idempotentReplay'], 'Replay failed: ' + str(replay))
+        require(replay['transactionId'] == first['transactionId'], 'Replay transaction ID changed')
 
         changed = copy.deepcopy(bet)
         changed['money']['amount'] = '79.00'
-        assert submit(0, provider, changed)[0] == 409
+        conflict_code, conflict_result = submit(0, provider, changed)
+        require(conflict_code == 409, 'Expected identity conflict: ' + str(conflict_result))
 
         rejected_code, rejected_result = submit(
             0, provider, operation(player, wallet)
         )
-        assert rejected_code == 422
+        require(rejected_code == 422 and rejected_result.get('failureCode') == 'INSUFFICIENT_FUNDS',
+                'Expected insufficient funds rejection: ' + str(rejected_result))
 
         win = operation(player, wallet, 'WIN', '30.00')
         win_code, win_result = submit(0, provider, win)
-        assert win_code == 200
+        require(win_code == 200 and win_result.get('status') == 'PROCESSED',
+                'WIN failed: ' + str(win_result))
 
         wallet_status, wallet_result = request(
             BASES[0], 'GET', '/wallets/' + wallet, internal
@@ -106,11 +114,12 @@ def dashboard():
             return False
     wait(loaded, 'Grafana dashboard provisioning', seconds=90)
     datasource = get('http://grafana:3000/api/datasources/uid/wagering-prometheus', True)
-    assert datasource['url'] == 'http://prometheus:9090'
+    require(datasource['url'] == 'http://prometheus:9090', 'Unexpected Grafana datasource URL')
     # Use the Grafana datasource proxy too: direct Prometheus reachability is not enough.
     proxy = get('http://grafana:3000/api/datasources/proxy/uid/wagering-prometheus/api/v1/query?' +
                 urllib.parse.urlencode({'query': 'up{job=~"wagering-.*"}'}), True)
-    assert proxy['status'] == 'success' and len(proxy['data']['result']) == 3
+    require(proxy['status'] == 'success' and len(proxy['data']['result']) == 3,
+            'Expected three scrape targets through the Grafana proxy')
     for panel in expected['panels']:
         for target in panel['targets']:
             result = query(target['expr'])
@@ -122,12 +131,14 @@ def dashboard():
         'wagering_financial_outcomes_total{transport="http",replay="true"}',
         'wagering_database_state{job="wagering-api",measure="transactions_rejected"}',
     ]:
-        assert observed(expression, lambda x: x > 0), expression
-    assert observed('wagering_sqs_messages{job="wagering-api"}', lambda x: x >= 0)
+        require(observed(expression, lambda x: x > 0), 'Missing positive metric: ' + expression)
+    require(observed('wagering_sqs_messages{job="wagering-api"}', lambda x: x >= 0),
+            'Missing finite nonnegative queue depths')
     print('PASS: Grafana provisioning, datasource proxy and dashboard PromQL', flush=True)
 
 
 def main():
+    print('Python optimization level: ' + str(sys.flags.optimize), flush=True)
     phase = sys.argv[1]
     backlog = 'wagering_database_state{job="wagering-api",measure="outbox_pending"}'
     if phase == 'traffic':
