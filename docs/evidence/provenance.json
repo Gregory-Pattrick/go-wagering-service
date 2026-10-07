@@ -1,0 +1,30 @@
+{
+  "description": "Historical user-supplied summaries; not validation of the final delivery revision.",
+  "transformations": "Only UTF-8 BOM removal if present and CRLF/CR to LF normalization; no numeric, revision or working-tree metadata changes.",
+  "files": [
+    {
+      "supplied_filename": "PERFORMANCE.md",
+      "repository_path": "docs/evidence/http-historical/PERFORMANCE.md",
+      "supplied_sha256": "44841c9b4e07527afe74acb4c09b277157487b78ecef6dc292ca5d1177c5c726",
+      "repository_sha256": "44841c9b4e07527afe74acb4c09b277157487b78ecef6dc292ca5d1177c5c726"
+    },
+    {
+      "supplied_filename": "environment.json",
+      "repository_path": "docs/evidence/http-historical/environment.json",
+      "supplied_sha256": "0d0802662a5d7aef8b8fa799bbc754d218173898c11ece80f19fd1d13b42d429",
+      "repository_sha256": "82efdcba4a4be1783b31de8273ae90e9eb74f6eb7bfeda8b45eaf690a46fdfc6"
+    },
+    {
+      "supplied_filename": "SQS-PERFORMANCE.md",
+      "repository_path": "docs/evidence/sqs-historical/SQS-PERFORMANCE.md",
+      "supplied_sha256": "97404332601b362f2b22311eab052ff7256d29708606343cd12ecd25e15c1665",
+      "repository_sha256": "97404332601b362f2b22311eab052ff7256d29708606343cd12ecd25e15c1665"
+    },
+    {
+      "supplied_filename": "environment(1).json",
+      "repository_path": "docs/evidence/sqs-historical/environment.json",
+      "supplied_sha256": "60de9a86e746630427662cf6ff9b1add287ace6a895294850fd781bbe5d71e14",
+      "repository_sha256": "447b61d17f0626b4ffd5535c04dd54ebee0055af721fbd1390582c53c67eb965"
+    }
+  ]
+}

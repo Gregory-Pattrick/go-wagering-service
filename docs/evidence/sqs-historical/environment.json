@@ -1,0 +1,38 @@
+{
+    "commit":  "219a7f0a71d3dd613f9a54761fa82cbc0db24eae",
+    "dockerCPUs":  6,
+    "generator":  "cmd/load-sqs with AWS SDK from go.mod",
+    "warmupSeconds":  30,
+    "composeVersion":  "5.5.1",
+    "repetitions":  1,
+    "observerConcurrency":  16,
+    "tracingEnabled":  false,
+    "outageSeconds":  20,
+    "observerRoundDelayMs":  250,
+    "apiPoolMaxConnections":  10,
+    "dockerVersion":  "29.8.2",
+    "workingTreeChanges":  [
+                               " M README.md",
+                               " M docs/PERFORMANCE.md",
+                               "?? Dockerfile.sqs-performance",
+                               "?? cmd/load-sqs/",
+                               "?? compose.sqs-performance.yaml",
+                               "?? deploy/performance/sqs_observe.py",
+                               "?? docs/SQS-PERFORMANCE.md",
+                               "?? scripts/test-sqs-performance.ps1"
+                           ],
+    "hostCPU":  [
+                    {
+                        "Name":  "Intel(R) Core(TM) i5-8400 CPU @ 2.80GHz",
+                        "NumberOfCores":  6,
+                        "NumberOfLogicalProcessors":  6
+                    }
+                ],
+    "topology":  "3 APIs, 2 publishers, 2 consumers, PostgreSQL, Keycloak, MiniStack, Go producer, HTTP observer, sampler",
+    "goImage":  "golang:1.27.1-bookworm",
+    "rate":  "20",
+    "dockerRAMBytes":  16738217984,
+    "hostRAMBytes":  34291187712,
+    "raceEnabled":  false,
+    "measurementSeconds":  120
+}

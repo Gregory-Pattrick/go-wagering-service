@@ -1,0 +1,33 @@
+{
+    "warmupSeconds":  30,
+    "rate":  "20",
+    "dockerVersion":  "29.8.2",
+    "goImage":  "golang:1.27.1-bookworm",
+    "measurementSeconds":  120,
+    "commit":  "ff8c3653db3c09d0fa997fa8f736e63de3ca4793",
+    "hostCPU":  [
+                    {
+                        "Name":  "Intel(R) Core(TM) i5-8400 CPU @ 2.80GHz",
+                        "NumberOfCores":  6,
+                        "NumberOfLogicalProcessors":  6
+                    }
+                ],
+    "hostRAMBytes":  34291187712,
+    "composeVersion":  "5.5.1",
+    "tracingEnabled":  false,
+    "apiPoolMaxConnections":  10,
+    "topology":  "3 APIs, 2 publishers, PostgreSQL, Keycloak, MiniStack, k6, metrics sampler",
+    "raceEnabled":  false,
+    "workingTreeChanges":  [
+                               " M README.md",
+                               "?? Dockerfile.performance",
+                               "?? compose.performance.yaml",
+                               "?? deploy/performance/",
+                               "?? docs/PERFORMANCE.md",
+                               "?? scripts/test-performance.ps1"
+                           ],
+    "repetitions":  1,
+    "k6Image":  "grafana/k6:1.3.0",
+    "dockerRAMBytes":  16738217984,
+    "dockerCPUs":  6
+}
