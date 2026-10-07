@@ -1,8 +1,8 @@
 # Delivery checklist and result record
 
-This file contains pending gates, not an assertion that they passed. Fill it
-with observed results after applying the broker-authentication and delivery-
-readiness blocks. Do not replace an error with a manually printed PASS.
+Results below distinguish supplied execution evidence from author-reported outcomes.
+See evidence/final-validation.md and DELIVERY-REVIEW.md for scope and provenance.
+The execution instructions are retained for reproducibility.
 
 ## Execution order
 
@@ -24,18 +24,18 @@ that new revision and rerun the affected gates.
 
 | Gate | Status | Tested revision | Actual evidence |
 | --- | --- | --- | --- |
-| Unit tests, vet and build | PENDING | — | — |
-| Financial API / PostgreSQL integration and race detector | PENDING | — | — |
-| Broker signatures, IAM denial checks and graceful restart | PENDING | — | — |
-| Complete startup, migrations and readiness | PENDING | — | — |
-| HTTP/SQS smoke and operation identifier logs | PENDING | — | — |
-| Distributed concurrency, fifty duplicates and SQL audit | PENDING | — | — |
-| Four controlled process-crash recovery windows | PENDING | — | — |
-| Tracing and collector outage | PENDING | — | — |
-| Dashboards, live traffic, backlog and recovery | PENDING | — | — |
-| Fresh clone with new volumes | PENDING | — | — |
-| Final-revision HTTP/SQS performance, if claimed | PENDING | — | Historical reports are explicitly separate |
-| Repository access, final push and clean status | PENDING | — | — |
+| Unit tests, vet and build | PASS reported by author | Earlier delivery sequence; individual revision not recorded | See evidence/final-validation.md scope |
+| Financial API / PostgreSQL integration and race detector | PASS reported by author | Earlier delivery sequence; individual revision not recorded | API integration command completed successfully |
+| Broker signatures, IAM denial checks and graceful restart | PASS reported by author | Earlier delivery sequence; individual revision not recorded | Security script passed after Dockerfile correction |
+| Complete startup, migrations and readiness | PASS | 0304031843d4be778551cd307830232ed2bb2221 | Fresh-checkout validation |
+| HTTP/SQS smoke and operation identifier logs | PASS | Fresh smoke: 0304031843d4be778551cd307830232ed2bb2221; earlier log inspection revision not recorded | Fresh smoke passed; supplied logs link consumer, HTTP replay and outbox |
+| Distributed concurrency, fifty duplicates and SQL audit | PASS | 0304031843d4be778551cd307830232ed2bb2221 | test-results/distributed-20261007-194332 |
+| Four controlled process-crash recovery windows | PASS reported by author | Final validation sequence at 0304031843d4be778551cd307830232ed2bb2221 | Recovery script completed successfully |
+| Tracing and collector outage | PASS reported by author | Final validation sequence at 0304031843d4be778551cd307830232ed2bb2221 | Tracing script completed successfully |
+| Dashboards, live traffic, backlog and recovery | PASS reported by author | Final validation sequence at 0304031843d4be778551cd307830232ed2bb2221 | Dashboard script completed successfully |
+| Fresh clone with new volumes | PASS | 0304031843d4be778551cd307830232ed2bb2221 | wagering-clean-a2504f50d29a; see evidence/final-validation.md |
+| Final-revision HTTP/SQS performance, if claimed | NOT CLAIMED | Historical revisions retained separately | See evidence/README.md; no final-revision measurement claimed |
+| Repository access, final push and clean status | Push and clean status confirmed; evaluator access pending | Documentation head c8ebf30 before this update | Supplied Git output; evaluator access requires confirmation |
 
 Previous user-reported PASS results remain historical evidence. This table is
 for final delivery validation; it does not retroactively invalidate earlier runs.
