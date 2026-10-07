@@ -142,7 +142,9 @@ def run():
 
     player, wallet = opened(internal)
     body = operation(player, wallet)
-    results = parallel([lambda i=i: submit(i, provider, body) for i in range(12)])
+    duplicate_requests = 50
+    results = parallel([lambda i=i: submit(i, provider, body) for i in range(duplicate_requests)])
+    require(len(results) == duplicate_requests, 'Missing duplicate responses')
     require(all(s == 200 and r['balance']['amount'] == '20.00' for s, r in results), 'Duplicate failed')
     require(len({r['transactionId'] for _, r in results}) == 1, 'Duplicate transaction identity')
     require(sum(not r['idempotentReplay'] for _, r in results) == 1, 'Expected one original response')
@@ -153,7 +155,10 @@ def run():
         require(status == 200 and replay['idempotentReplay'] and replay['balance']['amount'] == '20.00',
                 'Replay lost original snapshot')
     verify_wallet(internal, wallet, '50.00', 3)
-    passed('cross-process idempotency and immutable replay snapshot')
+    REPORT['duplicateRequests'] = duplicate_requests
+    REPORT['duplicateOriginalResponses'] = sum(not r['idempotentReplay'] for _, r in results)
+    REPORT['duplicateReplayResponses'] = sum(r['idempotentReplay'] for _, r in results)
+    passed('50 concurrent requests across three APIs and immutable replay snapshot')
 
     player, wallet = opened(internal)
     bet = operation(player, wallet)

@@ -305,10 +305,11 @@ func TestFinancialHTTPWithPostgresAndKeycloak(t *testing.T) {
 			data   []byte
 			err    error
 		}
-		results := make(chan answer, 12)
+		const duplicateRequests = 50
+		results := make(chan answer, duplicateRequests)
 		start := make(chan struct{})
 		var wg sync.WaitGroup
-		for i := 0; i < 12; i++ {
+		for i := 0; i < duplicateRequests; i++ {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()

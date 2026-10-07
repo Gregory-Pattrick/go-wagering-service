@@ -13,8 +13,13 @@ for every Go process. The image is a test image, not the production runtime.
 ## Run on Windows
 
 From the repository root, open `scripts/test-distributed.ps1` in your editor.
-If script execution is allowed, run it directly. Otherwise copy its complete
-contents into PowerShell. Do not run only a selection inside its try/finally.
+If script execution is allowed, run it directly. Otherwise execute the whole file as one script block:
+
+```powershell
+& ([scriptblock]::Create((Get-Content -Raw -LiteralPath ".\scripts\test-distributed.ps1")))
+```
+
+Do not run individual selections from its try/finally.
 
 The script builds the race image, starts dependencies and processes, runs the
 HTTP/SQS scenarios, runs the SQL audit, inspects the seven processes, captures
@@ -30,7 +35,7 @@ dependency updates must already be applied. The first image build can be slow.
 | Scenario | Expected result |
 | --- | --- |
 | Three concurrent BETs of 80.00 on 100.00 | One PROCESSED, two INSUFFICIENT_FUNDS, balance 20.00, version 2 |
-| Twelve identical requests distributed across three APIs | One original response and eleven replays; one transaction ID |
+| Fifty identical requests distributed across three APIs | One original response and forty-nine replays; one transaction ID |
 | Replay after a WIN of 30.00 | Original BET response remains 20.00; current balance is 50.00 |
 | Concurrent REFUND and ROLLBACK of the same BET | One compensation, one ALREADY_REVERSED, final balance 100.00 |
 | Four wallets submitted through HTTP and SQS concurrently | One debit per financial identity |
