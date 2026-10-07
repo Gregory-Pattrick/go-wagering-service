@@ -92,7 +92,7 @@ automatically. Its UID is `wagering-tempo`.
 
 Tempo's local API is available at http://127.0.0.1:3200. Both published ports are
 bound to loopback. Collector receivers remain inside the Compose network.
-Operational Prometheus dashboards are a subsequent block; this block provisions
+Operational Prometheus dashboards are provided by compose.observability.yaml; tracing provisions
 the trace viewer only. Existing Grafana volumes retain their initial password.
 
 ## Validation
@@ -120,7 +120,8 @@ with other suites that reset it.
 
 Preparation included static syntax/SQL/patch checks. Compilation, Docker image
 validation, tests and real traces must be verified locally before claiming this
-block passed. The MiniStack signature-validation limitation is unchanged.
+block passed. Broker signature enforcement is provided by the separate authentication
+candidate; see broker-authentication.md for its pending runtime gates.
 
 ## Pinned dependencies and primary references
 

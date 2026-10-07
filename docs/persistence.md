@@ -15,7 +15,7 @@ No callback may publish to a broker or send an irreversible external response.
 ledger, journal, both postings and two events in the same transaction.
 `SaveDecision` persists a processing decision, its optional wallet movement,
 ledger, journal, events and pending-work lifecycle. `CompleteInbox` joins that
-same transaction for a future SQS consumer.
+same transaction for the SQS consumer.
 
 `LockWallet` uses SELECT FOR UPDATE. Every writer must acquire the wallet lock
 before evaluating its balance and loading compensation history. SaveWallet also
@@ -25,8 +25,8 @@ existing identities without leaving SQL in an aborted state.
 
 Pending work records store attempts, schedule, expiry and lease fields. Outbox
 records store event identity, immutable JSONB snapshot and delivery/lease fields.
-Worker claiming, scheduling updates, broker publication and full transport
-idempotency orchestration are subsequent work; this block provides persistence.
+Workers claim leased work, update retry schedules and publish stored outbox
+snapshots. The application service coordinates durable transport idempotency.
 JSONB stores an immutable semantic snapshot, not the original JSON whitespace.
 
 READ COMMITTED plus per-wallet locking serializes competing wallet writers;
@@ -52,7 +52,7 @@ docker compose -f compose.yaml -f compose.finance.yaml --profile finance run --b
 The migration service starts the normal PostgreSQL dependency and uses the
 migration role. It applies missing versions, verifies existing checksums and is
 safe to repeat. It does not change the main Compose file or require a database
-reset. Both financial migrations must be installed before using the repositories.
+reset. Apply all three migrations before starting the current application.
 
 Go execution on the host is also available:
 
@@ -83,7 +83,8 @@ wrong accounting accounts, missing events, two concurrent BETs of 80.00 against
 100.00, an unrelated wallet while another is locked, original replay snapshots,
 provider-scoped lookups, reversals, compensation history, LOSS and durable pending
 state. These tests use separate database connections within one Go process;
-the required three-process and broker crash tests are still pending.
+separate distributed and recovery suites exercise multiple processes and
+application process crashes; see distributed-tests.md and recovery-tests.md.
 
 The suite uses -race and does not reuse cached results. To remove only its
 isolated test database container:
@@ -94,16 +95,9 @@ docker compose -f compose.yaml -f compose.finance.yaml rm -s -f finance-postgres
 
 No `down -v` command is required.
 
-## Scope and Validation Status
+## Integration
 
-The adapter is ready for application-service integration, but this block does
-not expose new financial HTTP routes or start background workers. Authorization
-must be applied before repository lookup/replay. Request hash conflicts and
-alternative-key responses still need the shared application orchestration.
-
-During preparation, Go syntax, SQL syntax, Compose YAML and sequential patch
-application were checked. Go compilation and PostgreSQL execution were not
-completed in the preparation environment. A temporary PostgreSQL installation
-could not start because of environment user/ownership restrictions. Run the
-commands above and record their actual results before considering the block
-validated; no passing integration result is claimed here.
+HTTP and SQS use the shared financial application service. Authorization precedes
+lookup and replay. Wallet state, transaction state, ledger, journal, inbox where
+applicable, and outbox commit atomically. Use the unified startup in README.md;
+it applies migrations before the financial processes start.

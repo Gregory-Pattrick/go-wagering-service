@@ -23,7 +23,7 @@ before domain construction and hashing.
 
 Only WIN, REFUND and ROLLBACK accept references in this contract. A transaction
 cannot reference its own external ID. Actual reference eligibility and financial
-effects are responsibilities of the next domain/application processing stage.
+effects are responsibilities of the domain processing and application packages.
 
 `NewExternal` rejects OPENING. `NewOpening` accepts only a positive amount and
 internal transaction, wallet and player identities. It has no external ID,
@@ -32,7 +32,7 @@ wallet creation must not create an OPENING transaction. A processed opening's
 result must equal its amount and have wallet version 1.
 
 The caller must supply a stable opening identity. Database constraints and the
-wallet-opening SQL transaction must later prevent duplicate opening credits.
+wallet-opening SQL transaction prevents duplicate opening credits.
 
 ## State Machine
 
@@ -113,20 +113,18 @@ are excluded. HTTP and SQS must construct the same ExternalInput. Rehydration
 recomputes the hash and rejects inconsistent stored input. This hash is a
 business identity aid, not a signature or proof against database tampering.
 
-Hash construction alone is not durable idempotency. Future database constraints
-must enforce (provider_id, idempotency_key) and (provider_id,
-external_transaction_id). The planned policy rejects a different key for an
+Hash construction alone is not durable idempotency. Database constraints
+enforce (provider_id, idempotency_key) and (provider_id,
+external_transaction_id). The application policy rejects a different key for an
 existing external ID, even when the business hash matches. Authorization must
 precede replay lookup or disclosure of a stored result.
 
-## Remaining Integration Work
+## Application integration
 
-Financial effects, reference eligibility and duplicate-reversal protection,
-ledger entries, events, SQL transactions, persistent idempotency, and durable
-recovery of pending operations are not implemented in this step. A later
-application service must commit state, balance, ledger, inbox when applicable,
-and outbox together. It must either finish PENDING synchronously in the same
-SQL transaction or persist enough scheduling state for another process to resume.
+The processing domain evaluates financial effects and reference eligibility.
+The application commits state, balance, ledger, journal, inbox where applicable,
+and outbox together. Durable reference work permits another worker to resume
+unresolved references. Database constraints enforce duplicate protection.
 
 Tests cover amount policies, identities, internal opening, the transition matrix,
 terminal protection, result snapshots, detached copies, invalid persisted states

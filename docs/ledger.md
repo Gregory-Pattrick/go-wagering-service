@@ -45,7 +45,7 @@ not prove that a business operation is authorized or correct.
 
 ## Persistence and Double Entry
 
-Database enforcement remains to be implemented in the migrations:
+The database migrations enforce these additional guarantees:
 
 - UNIQUE(wallet_id, transaction_id) prevents duplicate wallet movements.
 - Foreign keys and cross-record checks enforce identity and financial consistency.
@@ -53,9 +53,9 @@ Database enforcement remains to be implemented in the migrations:
 - Wallet balance, ledger, transaction state and outbox must share one SQL commit;
   inbox completion joins that commit when processing a message.
 
-The planned optional double-entry journal is separate from this wallet ledger.
-It will record balanced accounting postings without adding a second wallet
-ledger row for the same movement. This step does not implement that journal.
+The optional double-entry journal is implemented separately from this wallet
+ledger. It records balanced postings without adding a second wallet ledger row
+for the same movement; see accounting.md.
 
 ## Verification
 
@@ -69,4 +69,4 @@ go test -count=1 ./internal/domain/ledger
 
 These tests verify the domain object. They do not prove database immutability,
 atomic commits, duplicate protection or multi-process financial correctness.
-Those guarantees require subsequent PostgreSQL integration tests.
+Those guarantees are exercised by the PostgreSQL and distributed suites.

@@ -39,7 +39,7 @@ not timestamp uniqueness.
 This package does not persist wallets, create ledger entries or publish events.
 Its tests prove in-memory domain invariants, not cross-process consistency.
 
-The application unit of work must eventually lock the wallet row with
+The application unit of work locks the wallet row with
 `SELECT ... FOR UPDATE`, rehydrate it, apply the operation and persist its
 balance, ledger, transaction state and outbox records in one SQL transaction.
 All writers must follow that protocol. A unique database constraint must
@@ -49,8 +49,8 @@ uniqueness. No process-local mutex will be used as a distributed lock.
 Positive opening balances require an internal `OPENING` transaction, credit
 ledger entry and both financial events in the same commit as wallet creation,
 with wallet version `1`. Zero opening balances require none of these financial
-records. These application and database behaviors are not implemented by this
-step and must be verified against real PostgreSQL in subsequent steps.
+records. These behaviors are implemented by the application and PostgreSQL adapter;
+the financial integration suite verifies them against real PostgreSQL.
 
 ## Verification
 

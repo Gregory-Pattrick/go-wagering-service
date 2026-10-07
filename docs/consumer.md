@@ -20,9 +20,9 @@ Separate IAM identities and named volumes are used for the producer and consumer
 The consumer cannot read the producer key. Its queue policy permits receive,
 delete, visibility changes and queue metadata; it cannot publish financial input
 or output. Administrative credentials occur only in initializers and the smoke
-observer. The previously documented MiniStack SigV4 wrong-secret limitation
-remains unresolved; do not treat this setup as proof of production-grade broker
-authentication.
+observer. The unmodified MiniStack image accepts incorrect secrets. The custom signature
+gate addresses this at the local broker boundary; see broker-authentication.md
+for supported protocols and the outstanding runtime checks.
 
 ## Input contract
 

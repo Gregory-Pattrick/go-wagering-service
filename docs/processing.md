@@ -41,8 +41,8 @@ reference matching follows the fields explicitly required by the challenge.
 Missing references and eligible references still in PENDING or PENDING_REFERENCE
 produce PENDING_REFERENCE without changing the wallet. Evaluating an already
 waiting operation does not recreate the state transition. Scheduling, backoff,
-TTL, durable retries and eventual REFERENCE_NOT_FOUND rejection are pending
-application-worker work, not part of this in-memory evaluator.
+TTL, durable retries and eventual REFERENCE_NOT_FOUND rejection are implemented
+by the application workers, outside this in-memory evaluator.
 
 References ending in REJECTED or FAILED produce REFERENCE_NOT_PROCESSED.
 Ineligible kinds produce REFERENCE_KIND_INVALID. Context mismatches and partial
@@ -88,9 +88,9 @@ The occurrence time is the latest of the supplied time, wallet update time and
 transaction update time. The same value is used for the successful transaction,
 wallet and ledger entry. Ordering still relies on version and database rules.
 
-## Application Contract and Remaining Work
+## Application Contract
 
-The future application service must:
+The application service follows this sequence:
 
 1. Authenticate/authorize, resolve persistent idempotency and lock the wallet.
 2. Load the reference, original ledger and compensation history consistently.
@@ -102,7 +102,7 @@ The future application service must:
 A successful LOSS requires WagerTransactionProcessed, without
 WalletBalanceChanged. A successful movement requires both financial events.
 A business rejection requires its rejection event. Event construction and outbox
-persistence are not implemented in this step.
+persistence are provided by the events package and PostgreSQL adapter.
 
 No local mutex, in-memory flag or passing unit test establishes cross-process
 correctness. The PostgreSQL locking, uniqueness constraints, durable scheduling

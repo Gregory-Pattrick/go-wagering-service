@@ -8,8 +8,8 @@
 
 ## Scope
 
-MiniStack 1.5.21 emulates the AWS SQS API locally. The Go application will use
-the AWS SDK and explicit endpoint configuration in a later step.
+MiniStack 1.5.21 emulates SQS behind the custom signature gate. The Go adapters
+use the AWS SDK with an explicit local endpoint.
 
 | Source FIFO queue | FIFO dead-letter queue |
 | --- | --- |
@@ -54,21 +54,18 @@ commands inside Compose so the queue hostname is resolvable.
 docker compose run --rm sqs-init /scripts/verify.py
 ```
 
-The script checks queue attributes and redrive configuration, then tests
-credential rejection. MiniStack 1.5.21 rejects unknown access keys with
-AUTH=true, but accepts a known access key signed with an incorrect secret.
-
-The incorrect-secret test therefore fails and remains a documented
-security verification gap. AUTH=true enables IAM policy evaluation;
-it does not provide general SigV4 signature authentication.
+The script checks queue attributes, redrive configuration and credential
+rejection, including an incorrect secret. The unmodified upstream image fails
+the wrong-secret case; the custom signature gate is intended to close that gap.
+Run test-broker-security.ps1 and retain its actual results before closing R1.
 
 A temporary FIFO queue exercises send, transport deduplication, visibility,
 actual redelivery and deletion. Business queue messages are never consumed
 or purged. The temporary queue is removed in a finally block.
 
-This does not yet prove financial idempotency, worker crash recovery,
-least-privilege IAM policies or actual DLQ movement after exhausted retries.
-Those require the subsequent policy and consumer integration stages.
+This infrastructure test does not alone prove financial idempotency or worker
+recovery. IAM, consumer, distributed and recovery suites verify those behaviors
+and actual DLQ movement separately.
 
 ## Authentication and Authorization Status
 
@@ -80,9 +77,8 @@ The Go application does not receive administrative credentials.
 Dedicated producer, consumer and outbox-publisher identities and
 least-privilege policies are provisioned automatically.
 See [SQS IAM Policies](sqs-iam.md) for verification and limitations.
-Runtime credential provisioning for the Go application remains pending.
-Successful denial tests for bad credentials do not demonstrate policy
-isolation between those future identities.
+Runtime provisioning writes dedicated role credentials to mounted volumes.
+Signature rejection and least-privilege policy isolation are tested separately.
 
 The shared input queue will accept messages only from a trusted internal
 producer. Provider clients must not receive direct write credentials to
@@ -110,11 +106,11 @@ isolated smoke-test queue. This checks queue configuration persistence,
 not message durability during an abrupt broker kill.
 
 Do not assume AWS-equivalent durability for emulator process crashes.
-Upcoming worker-crash tests should kill application workers while leaving
+The recovery suites kill application workers while leaving
 the broker and PostgreSQL running. Graceful full-stack restarts preserve
 volumes. `docker compose down -v` deliberately deletes persistent data.
 
 ## Application Status
 
-No SQS Go adapter, consumer, inbox, outbox publisher or financial handler is
-implemented by this infrastructure change.
+The Go SQS adapter, transactional inbox, outbox publisher and shared financial
+handler are implemented. Start them with the complete command in README.md.

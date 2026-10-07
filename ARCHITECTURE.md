@@ -1,243 +1,161 @@
 # Architecture
 
-This document is updated as implementation progresses.
-
-## Authentication and Authorization
-
-### Identity Provider
-
-Keycloak is the external OAuth 2.0 / OpenID Connect identity provider.
-Service clients authenticate through the client credentials grant.
-
-The application does not store end-user passwords or issue its own tokens.
-
-The local realm is versioned and imported automatically by Docker Compose.
-Two provider clients allow cross-provider isolation tests. A separate
-internal client represents the wallet management service.
-
-### Identity Model
-
-Access tokens target the `wagering-api` audience.
-
-Keycloak assigns fixed claims to each service client:
-
-- `actor_type=provider` and `provider_id` for provider clients.
-- `actor_type=internal` for the wallet service.
-
-Provider identity must come from a verified access token. Request bodies
-and URL parameters cannot establish or override the authenticated provider.
-
-### API Enforcement
-
-The HTTP server authenticates requests before routing, except for public
-GET/HEAD health checks. The OIDC adapter verifies RS256 signatures against
-the trusted Keycloak JWKS, issuer, audience, expiration and identity claims.
-Client identities are checked against an explicit configuration allowlist.
-
-The configured issuer is `http://localhost:8081/realms/wagering`.
-Container networking may require a separate trusted internal JWKS URL;
-this must not disable issuer validation.
-
-Provider clients submit and read only their own transactions. Authorization
-runs before returning idempotent replays. Wallet endpoints require the
-internal service identity.
-
-Unrecognized identities and unsupported actor types are denied.
-The actor-policy middleware and provider-ownership guard are tested, but
-their use in financial handlers and replay use cases is still pending.
-
-### Local Environment
-
-Keycloak runs in development mode with an ephemeral embedded database.
-Recreating its container restores the versioned realm and rotates signing
-keys. PostgreSQL financial data is stored independently in a named volume.
-
-Local client secrets are reproducible development fixtures.
-Production requires TLS, managed secrets and durable IdP storage.
-
-### Current Status
-
-Realm provisioning, service token issuance, Go token verification and
-HTTP authentication are implemented. Real-Keycloak tests exercise actor
-policies and provider isolation through test-only handlers. Financial
-endpoint authorization and replay isolation remain pending with those
-endpoints and use cases.
-
-See [Authentication](docs/authentication.md) for configuration, lifecycle,
-tests and limitations, including runtime JWKS failures currently returning
-HTTP 401 instead of a separately classified HTTP 503.
-Broker authentication and authorization will be documented with SQS setup.
-
-## Transaction Lifecycle and Identity
-
-External transactions start in PENDING and may transition to
-PENDING_REFERENCE, PROCESSED, REJECTED or FAILED. Pending-reference
-transactions may transition to a terminal state. Terminal states cannot
-be changed.
-
-Retryable infrastructure failures must not become permanent FAILED
-outcomes. Unknown commit outcomes require retrying the same identity
-and checking persisted state.
-
-The business payload hash excludes internal transaction IDs,
-idempotency keys and transport metadata. HTTP and SQS will share the
-same domain input and canonical hashing implementation.
-
-Processed results retain the balance and wallet version observed at
-the original decision. Replay must use that snapshot.
-
-This domain layer does not yet enforce persistent idempotency,
-reference eligibility or atomic financial effects. Those guarantees
-require application rules and PostgreSQL transactions.
-
-See [Transaction Identity and Lifecycle](docs/transactions.md) for
-the complete state machine, hash contract and failure codes.
-
-## Wallet Ledger Invariants
-
-Each wallet ledger entry represents one positive financial movement.
-Its balance equation is validated using exact Money arithmetic.
-
-Entries expose no mutation methods. Corrections require new
-compensating transactions and entries. Rehydration validates stored
-data without applying another movement.
-
-The processing service must ensure that only eligible financial
-operations produce entries. LOSS, rejected operations and zero-balance
-wallet creation produce no ledger entry.
-
-Planned PostgreSQL enforcement includes uniqueness of
-(wallet_id, transaction_id), immutable records and atomic persistence
-with wallet balances, transaction state and outbox records.
-
-The double-entry journal is implemented in migration 002, preserving one
-wallet ledger entry per financial movement.
-
-## Financial Decisions and Compensation Policy
-
-The domain evaluator performs no I/O and returns a decision for the
-application service to persist atomically.
-
-References must match provider, external identity, player, wallet,
-currency and round. REFUND and ROLLBACK require the original full amount.
-WIN may reference a BET with a different amount.
-
-A BET permits one successful direct compensation: REFUND or ROLLBACK.
-Rolling back a REFUND does not reopen the original BET's compensation
-right. The evaluator uses compensation history supplied by the caller;
-database locking and constraints must enforce this policy concurrently.
-
-Reference lookup must be scoped by provider and external transaction ID.
-The wallet, reference ledger and compensation history must be loaded
-consistently inside the financial SQL transaction.
-
-The application must persist the decision together with the required
-ledger, inbox and outbox records before publishing any events.
-
-See [External Financial Processing Rules](docs/processing.md).
-
-## Event Snapshots and Outbox Contract
-
-Event constructors define the event type and schema version.
-All financial events use wallet ID as aggregate ID.
-
-Successful movements produce transaction-processed and balance-changed
-events. LOSS produces only transaction-processed. Repeated reference
-waits produce no additional logical event, and terminal replays must
-not invoke event construction.
-
-The application must persist event IDs and serialized snapshots in
-the same SQL transaction as the financial decision. The future outbox
-publisher must reuse those stored bytes and IDs on every retry.
-
-Event construction alone does not provide persistent deduplication
-or delivery guarantees.
-
-See [Typed Financial Events](docs/events.md).
-
-## Implemented SQL Transaction Boundary
-
-The financial adapter uses pgx v5 with explicit SQL. Money is represented by
-BIGINT minor units and currency, with no float conversion. Store.Within owns
-one READ COMMITTED transaction shared by all Unit repository methods.
-
-Wallet writers use SELECT FOR UPDATE and version-checked updates. Immutable
-ledger entries form a versioned balance chain. Deferred database constraints
-require matching transaction state, ledger, result snapshots and outbox data.
-Every movement also requires a balanced, immutable two-posting journal.
-Clearing accounts have no shared mutable balance.
-
-Pending transactions require durable work rows. Terminal transitions remove
-that work. Inbox completion and outbox insertion can share the same financial
-commit. Migration and application database roles remain separate.
-
-The adapter classifies retryable SQL errors without automatically repeating
-callbacks. Unknown commit outcomes require lookup using the original identity.
-The application layer must supply bounded retries, authorization and transport
-idempotency handling. HTTP financial routes are now integrated; background workers remain pending.
-
-See [Financial Persistence](docs/persistence.md) for commands, implemented
-integration tests, timestamp precision and the current validation status.
-
-## Shared Financial Application Service
-
-internal/application/financial defines use cases and narrow persistence ports.
-The PostgreSQL adapter implements those ports; the application does not import
-pgx or HTTP. Fx composes the service and HTTP routes, resolving the database pool
-only after lifecycle startup when a use case is invoked.
-
-Provider authorization precedes persistent identity lookup. Identity insertion
-occurs before wallet locking. Unique collisions are resolved by provider-scoped
-key/hash comparison and external-ID policy. Replays return immutable original
-results without new financial records. Only deadlock/serialization failures
-receive bounded whole-transaction retry; ambiguous commit results require the
-caller to reuse the same identity.
-
-The HTTP adapter enforces strict bounded JSON and canonical UUID normalization.
-Queries by internal transaction ID include provider filtering. Ledger cursors
-bind a wallet and an upper version; reconciliation reads wallet and ledger in a
-single SQL snapshot and records detected mismatches without repairing balances.
-
-The same financial use case will be integrated with the SQS consumer. Pending
-reference scheduling is persisted, but its retry worker and the outbox publisher
-are not part of this block. The API integration suite uses real PostgreSQL and
-Keycloak; separate handler/pool tests do not replace the three-process proof.
-
-## Durable worker boundaries
-
-`cmd/workers` composes two cancellable loops through Fx. PostgreSQL claims use
-SKIP LOCKED and fresh lease tokens; financial resumption rechecks ownership under
-row locks and shares the API domain evaluator. The outbox sender performs SQS I/O
-outside SQL transactions, then confirms only its live lease. Acknowledgment loss
-allows stable-event-ID republication. No local mutex or FIFO deduplication is part
-of financial correctness. See [workers](docs/workers.md) for timing, failure
-semantics, test coverage and remaining resilience work.
-
-## Input delivery boundary
-
-An inbox-aware backend decorator runs the existing financial Submit callback
-inside the same SQL unit as inbox completion. A transaction-scoped advisory lock
-protects one consumer/envelope identity before its row exists; unique business
-identities and wallet row locks continue to protect financial correctness.
-Receipts are deleted after commit only. A trusted internal producer owns the
-shared-queue provider-routing boundary. See [consumer](docs/consumer.md) for
-canonical envelope hashing, redrive and shutdown behavior.
-
-## Telemetry boundary
-
-Optional Fx decorators observe confirmed financial SQL outcomes and transport
-operations without importing a monitoring library into the financial domain.
-Read-only, time-bounded dependency probes update cached health/metrics snapshots.
-Unavailable dependencies produce readiness 503 and unavailable gauge values,
-while liveness stays independent. Global database gauges are not additive across
-API replicas. See [observability](docs/observability.md) for metric semantics,
-process-counter limitations and the local monitoring access boundary.
-
-## Optional Distributed Tracing
-
-The financial application depends on a TracePort; the domain remains free of
-OpenTelemetry. Infrastructure adapters propagate W3C trace context through SQS
-attributes and immutable outbox metadata inserted in the financial SQL transaction.
-The asynchronous exporter has bounded queues/timeouts; collector availability
-is excluded from financial readiness. Tracing and metrics share one Fx decorator
-per component. See docs/tracing.md for propagation, loss and validation semantics.
+## Composition and process boundaries
+
+A modular Go application exposes three entrypoints: `cmd/service` (HTTP),
+`cmd/workers` (reference recovery and outbox publication) and `cmd/consumer`
+(SQS ingestion). They share domain/application packages and PostgreSQL state.
+Separate executables replace the original plan's role-selected executable; the
+challenge does not require a single binary. No financial correctness guarantee
+relies on process-local memory or a particular replica surviving.
+
+Uber Fx composes configuration, pgx pools, repositories, use cases, adapters and
+workers through constructors, modules and lifecycle hooks. Configuration and
+initial dependencies are validated before serving work. Worker loops have
+cancellable contexts and bounded operation times. Shutdown stops new intake,
+cancels or finishes in-flight work, waits for loops and closes dependencies in
+reverse lifecycle order. Unacknowledged work remains durable and recoverable.
+The domain imports neither Fx nor HTTP, SQS or persistence libraries.
+
+The canonical local command in README enables the complete Compose file/profile
+set. Its migration prerequisite applies all three schema versions before business
+processes start. Readiness probes PostgreSQL and SQS; liveness only checks the
+process. Telemetry must be enabled for the complete readiness implementation.
+
+## Money, wallet and accounting
+
+Money stores exact int64 minor units and a supported ISO currency (BRL/USD).
+External input accepts nonnegative canonical decimal strings with exactly two
+fractional digits. It rejects exponents, non-finite values, extra scale and
+redundant leading zeros. Arithmetic checks overflow and currency compatibility,
+including subtraction and MinInt64 negation. Internal differences may be negative;
+a wallet balance cannot. Persistence uses BIGINT, never a monetary float.
+
+Wallets are unique by player/currency. A positive opening creates OPENING,
+ledger, double-entry journal and two events at wallet version 1 in one commit.
+A zero opening creates no financial entry/event. Later balance changes increment
+the version; LOSS preserves balance/version and emits only the processed event.
+
+Ledger entries form an immutable versioned balance chain. Unique indexes, checks,
+triggers and restricted role permissions protect nonnegative balances, identity,
+ledger immutability and atomic matching of wallet/transaction/ledger/outbox state.
+Migration 002 adds a balanced two-posting journal. Clearing accounts do not have
+a shared mutable balance, avoiding a global financial bottleneck.
+
+## SQL boundary and concurrency
+
+pgx v5 with explicit SQL keeps transaction boundaries and locks visible.
+`Store.Within` owns a READ COMMITTED transaction, and Unit methods share that
+transaction. Identity insertion precedes a wallet SELECT FOR UPDATE. Writers
+also check the previous version. Reference and compensation checks run inside
+the locked-wallet transaction. Independent wallet rows can advance concurrently.
+Deferred constraints reject incomplete financial changes at commit.
+
+The application retries only classified deadlocks/serialization failures, at
+most three attempts. It does not retry arbitrary callbacks after ambiguous
+commit results. Unknown commit outcomes require the original operation identity
+and key on retry. Reconciliation uses a read-only REPEATABLE READ snapshot and
+rebuilds the balance from the ledger, reporting discrepancies without repair.
+
+## Transaction identity, state and references
+
+External transactions begin PENDING, then become PROCESSED, REJECTED,
+PENDING_REFERENCE or FAILED. Terminal states cannot transition. Ordinary
+submissions decide inside one transaction rather than committing a separate
+asynchronous acceptance. Every committed pending state requires durable work.
+
+A SHA-256 hash covers sorted canonical business JSON; transport metadata and the
+idempotency key are excluded. HTTP and SQS normalize UUIDs and use the same domain
+input/hash. Unique provider/key and provider/external-ID indexes survive restarts.
+Same-key/same-payload requests replay the persisted original result, including
+the original balance. Changed payload returns conflict. Another key for an
+existing external identity also conflicts, even if its content is equivalent.
+
+Missing/nonterminal references persist a wait and durable schedule. Workers
+retry with capped exponential backoff and a finite TTL (15 minutes by default).
+Expiry produces REJECTED/REFERENCE_NOT_FOUND and an outbox event. A rejected or
+failed reference causes REFERENCE_NOT_PROCESSED. No financial movement occurs
+while waiting. See docs/transactions.md and docs/processing.md for failure codes.
+
+REFUND and ROLLBACK require the full referenced amount and matching provider,
+player, wallet, currency and round. One BET may receive one successful direct
+compensation: REFUND or ROLLBACK. Rolling back a REFUND does not reopen the BET's
+compensation right. The database's unique compensation index enforces this policy
+across processes. A reversal debit without funds uses a distinct failure code.
+
+## Authentication and authorization
+
+Keycloak provides OAuth2/OIDC client credentials and a versioned imported realm.
+The verifier checks RS256 signature, issuer, audience, token type, expiration,
+not-before, issued-at and explicit allowed client/actor/provider claims. The
+application neither stores passwords nor issues its own access tokens.
+
+Provider identity comes from the verified token, never a request body. Actor
+checks and provider ownership precede identity lookup and replay. Internal wallet
+routes require the wallet-service identity. Provider transaction queries include
+provider scoping, including queries by internal transaction ID.
+
+Initial JWKS unavailability prevents startup. Cached keys can remain usable
+through an IdP outage. Runtime JWKS failures currently map to 401 rather than a
+separate 503. Immediate revocation/introspection is not implemented. Keycloak's
+local development database is ephemeral; production needs durable IdP storage,
+TLS and managed secrets.
+
+The shared SQS input is writable only by a trusted internal producer with a
+restricted IAM policy. Game providers do not receive shared-queue credentials.
+Within that trust boundary, providerId is routing data; the consumer still checks
+allowed providers, envelope shape and every financial domain invariant.
+
+Unmodified MiniStack does not validate general SigV4 signatures. The local
+Dockerfile.broker adds a narrow signature gate before MiniStack's IAM evaluation
+and SQS dispatcher on the same listener. It preserves role-specific credentials
+and rejects unsupported paths/protocols. See docs/broker-authentication.md for
+constraints and verification status; this is not a production security gateway.
+
+## Inbox, outbox and recovery
+
+The inbox identity is `(consumerName, messageId)` plus a canonical envelope hash.
+A transaction-scoped advisory lock serializes that envelope identity; unique
+business identities and wallet row locks protect the financial operation.
+Inbox completion shares the transaction with domain, ledger and outbox changes.
+SQS deletion follows commit. Business rejections are terminal and acknowledged;
+invalid or transient failures are retained for retry/redrive. Pending references
+may be acknowledged after the durable reference job is stored.
+
+Input FIFO uses wallet ID as MessageGroupId and an explicit transport deduplication
+ID. Application correctness does not rely on FIFO's deduplication window.
+Visibility/retry policy and actual DLQ movement are documented in docs/consumer.md.
+
+Outbox events are typed, versioned, immutable snapshots stored in the financial
+commit. Publishers claim with SKIP LOCKED and fresh lease tokens, then perform
+network I/O outside the SQL transaction. Confirmation requires the live lease.
+An interruption after send but before acknowledgment permits republication with
+the same event ID. This is at-least-once delivery, not exactly-once publication.
+References use the same durable claim/fencing pattern and are re-evaluated under
+the wallet lock. Cancellation leaves leases or receipt visibility recoverable.
+
+## Observability and evidence
+
+JSON operation logs carry the available correlation, message, transaction,
+wallet and provider identifiers; outbox logs add event and causation identifiers.
+Success is recorded after durable financial completion or outbox confirmation.
+They exclude tokens, credential files, monetary values and complete payloads.
+See docs/operation-logs.md for transport and replay semantics.
+
+Metrics cover outcomes, duplicates, retries, surfaced conflicts, queue/DLQ depth,
+outbox age, latency, dependency health and reconciliation mismatches. Shared
+state gauges must not be summed across replicas. Metrics do not measure every
+SQL lock wait. Tracing propagates W3C context through SQS/outbox metadata; bounded
+exporters and collector outages do not determine financial readiness.
+
+The distributed suite uses three independent APIs, two publishers and two
+consumers with the race detector. Controlled SIGKILL tests target four durable
+boundaries. Separate load suites record workload, latency, errors, accounting
+audits and environment provenance. See docs/distributed-tests.md,
+docs/recovery-tests.md and both performance methodology documents.
+
+The final delivery must include actual runtime evidence and clean-checkout
+validation. Prior load results describe the pre-signature-gate broker. Current
+candidates and open gates are recorded in docs/DELIVERY-REVIEW.md. Generated tests,
+source review and previous-version PASS reports are not proof that an amended
+checkout has passed. No unconditional correctness guarantee is claimed.

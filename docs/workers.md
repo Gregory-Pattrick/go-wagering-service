@@ -149,5 +149,6 @@ an OS-level SIGKILL/multi-process crash test. The real SQS case verifies accepte
 sends and SQL confirmation, not downstream consumption or duplicate delivery
 beyond the FIFO deduplication window. Those checks remain in the resilience block.
 
-Worker readiness endpoints, complete metrics, tracing and the input consumer are
-not implemented by this block. API liveness does not establish worker readiness.
+Worker readiness, metrics, tracing and the input consumer are implemented in
+separate modules. The unified startup in README.md enables them. API liveness
+alone does not establish worker readiness.

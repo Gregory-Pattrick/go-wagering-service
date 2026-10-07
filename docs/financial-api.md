@@ -15,7 +15,7 @@ against the verified principal before persistent identity lookup or replay.
 | POST /wagering/transactions | Provider | Shared financial use case with persistent idempotency |
 | GET /wagering/transactions/{transactionId} | Owning provider | Original result, status and failure code |
 | GET /providers/{providerId}/wagering/transactions/{externalTransactionId} | Matching provider | Provider-scoped external lookup |
-| GET /metrics | Internal | Reconciliation mismatch counter; broader observability is still pending |
+| GET /metrics | Internal | Authenticated business metrics; see observability.md |
 
 The application authorization checks are repeated inside use cases, not only in
 HTTP middleware. Looking up another provider's internal transaction ID returns
@@ -41,7 +41,7 @@ not accepted externally. Domain amount and reference policies remain unchanged.
 
 The case-sensitive business strings are not trimmed or case-normalized. The
 SHA-256 contract remains the domain's lexical-key JSON encoding. Normalized UUIDs
-ensure HTTP and future SQS adapters can construct identical business payloads.
+ensure HTTP and SQS adapters can construct identical business payloads.
 
 ## Responses
 
@@ -153,13 +153,10 @@ Each run creates a new test wallet and verifies opening 100.00, BET 80.00, WIN
 print tokens or remove database records. Local fixture client secrets are the
 defaults; optional environment variables are documented in the script.
 
-## Remaining Work and Evidence
+## Background processing
 
-Pending reference operations are persisted with durable work and events but are
-not automatically retried until the reference worker is implemented. Likewise,
-outbox events accumulate until a publisher is added. SQS consumption, broker
-readiness, tracing and three-process/crash tests remain separate deliverables.
-
-This block's preparation includes source syntax and patch checks. Go execution,
-the real infrastructure suite and smoke script must pass on the user's machine;
-no unexecuted test is claimed as passing.
+Reference workers resume durable pending operations. Outbox publishers send
+stored event snapshots, and the SQS consumer uses the transactional inbox.
+The complete startup command in README.md enables all three application roles,
+readiness, metrics and tracing. Distributed and recovery suites are separate
+from the HTTP smoke test; retain their actual results when validating delivery.

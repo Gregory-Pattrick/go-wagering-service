@@ -25,7 +25,7 @@ YAML parsing does not validate Compose merges or enabled-profile dependencies.
 | R2 | High | The initial README startup path runs base Compose without migrations, workers, consumer or telemetry. Base API startup can succeed against an empty schema; financial requests then fail. `/health/ready` is installed only when observability is enabled. | Make the primary documented startup path apply migrations and start all required roles with PostgreSQL/SQS readiness. Validate that path with fresh project volumes and authenticated HTTP/SQS smoke tests. |
 | R3 | Medium | Successful HTTP logs contain route/status/correlation but omit transaction, wallet and provider IDs. SQS logs contain message/delivery IDs but omit the financial identity mapping. `internal/adapters/http/observation.go`, `internal/adapters/http/financial.go`, `internal/adapters/sqs/handler.go`, `internal/workers/observation.go`. | Log available operation identifiers at the application/transport boundaries, including persisted transaction IDs after success, without credentials or complete financial payloads. Verify both HTTP and SQS examples. |
 | R4 | Medium | Both duplicate-request suites used twelve concurrent requests; section 13 requires fifty. `internal/adapters/http/financial_integration_test.go`, `deploy/distributed/run.py`. | This review patch changes both to fifty and adds explicit distributed-report counts. Rerun both suites; require one original response, forty-nine replays, one transaction and one debit. Previous PASS results do not close the new test. |
-| R5 | Medium | README, ARCHITECTURE and several component documents still describe implemented features as future work. The main host example also omits required OIDC settings. | Consolidate current execution instructions and remove contradictory development-stage statements. Include reversal instructions and all required test profiles. |
+| R5 | Medium | README, ARCHITECTURE and several component documents still describe implemented features as future work. The main host example should document the existing OIDC defaults explicitly. | Consolidate current execution instructions and remove contradictory development-stage statements. Include reversal instructions and all required test profiles. |
 | R6 | Medium | Load methodologies are committed, but supplied measured reports are outside this archive. Final fresh-checkout validation has not been supplied. | Commit selected sanitized evidence with original provenance; preserve raw results separately. Run the final documented workflow from a clean checkout and record its exact revision. |
 
 R1 is corroborated by the emulator's documented distinction between IAM policy
@@ -48,7 +48,7 @@ unconditional certification of correctness. Open findings take precedence.
 | 5, 6.2, 6.4 — Wallet and immutable ledger | Wallet row locks, version updates, unique identities, nonnegative checks, immutable-row/truncate guards and deferred SQL constraints | Present; database integration coverage located |
 | 6.3, 7 — Transactions and reversals | Domain transitions, original-result snapshots, reference context checks, compensation uniqueness, durable reference TTL/backoff | Present; no separate asynchronous acceptance commit in ordinary submission |
 | 6.5, 10 — Inbox | Envelope hash, consumer/message identity, same financial SQL transaction and delete after commit | Present; broker identity trust depends on R1 |
-| 8, 13 — Distributed concurrency | Three APIs, two publishers, two consumers; overspending, compensation and mixed HTTP/SQS tests | Present; required fifty-request test awaits new execution under R4 |
+| 8, 13 — Distributed concurrency | Three APIs, two publishers, two consumers; overspending, compensation and mixed HTTP/SQS tests | Present; author reported PASS after the fifty-request update under R4 |
 | 9 — HTTP contracts | Wallets, ledger cursor, provider-scoped reads, submissions and snapshot reconciliation | Present; readiness needs telemetry startup under R2 |
 | 11 — Outbox and typed events | Immutable event snapshots, leased SKIP LOCKED claims, fenced confirmation and retry | Present; at-least-once publication is explicit |
 | 12 — Observability | Prometheus metrics, JSON logs, dependency probes, reconciliation counter | Present with identifier gap R3; metric limitations documented |
@@ -81,3 +81,18 @@ verification workflow; see [broker authentication](broker-authentication.md).
 Preparation-time Python and real HTTP checks passed, including the previously
 failing wrong-secret test. Close R1 only after Docker security checks and Go
 consumer/publisher regression checks succeed on the delivery environment.
+
+## Follow-up status
+
+- R4: the author reported PASS for both amended fifty-request suites and pushed
+  the changes. This is user-supplied execution evidence.
+- R2/R3/R5: the delivery-readiness block adds a complete startup command,
+  operation identifier logs and current documentation. Runtime validation of
+  these changes is pending; static checks are not a substitute.
+- Correction to R5: host OIDC settings already have usable defaults in
+  internal/config/auth.go. Their omission from the old example was a documentation
+  clarity issue, not a missing-required-variable startup failure.
+- R1: the broker authentication candidate still awaits the author's Docker and
+  Go regression runs. Earlier load results predate that candidate.
+- R6: sanitized evidence packaging and a fresh checkout remain final gates;
+  follow FINAL-VALIDATION.md without relabeling older performance results.

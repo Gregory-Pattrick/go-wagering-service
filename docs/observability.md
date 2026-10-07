@@ -18,7 +18,7 @@ business-port `/metrics` still requires a valid internal Keycloak token; provide
 and anonymous access remain forbidden. Operational listeners expose only health
 and aggregate metrics, without authentication. They default to loopback for
 host execution. Compose binds their host ports to 127.0.0.1 and makes them
-available inside the private Compose network for a future Prometheus scraper.
+available inside the private Compose network for the configured Prometheus scraper.
 Do not publish those operational ports on an internet-facing interface.
 
 The initial state is not ready until a probe completes. Probes run every five
@@ -112,27 +112,15 @@ separate lock-wait measurement is not yet provided.
 
 The Compose override supplies these values. The metadata-only API key is stored
 in a dedicated read-only volume. Local key fixtures are not production workload
-identity or key rotation. The existing MiniStack wrong-secret/SigV4 limitation
-remains documented and unresolved.
+identity or key rotation. The upstream MiniStack wrong-secret limitation and the custom signature gate
+are documented in broker-authentication.md.
 
 ## Full local stack
 
-In PowerShell, from the repository root:
-
-```powershell
-$stack = @(
-    "-f", "compose.yaml",
-    "-f", "compose.finance.yaml",
-    "-f", "compose.workers.yaml",
-    "-f", "compose.consumer.yaml",
-    "-f", "compose.telemetry.yaml"
-)
-docker compose @stack --profile workers --profile consumer up --build -d app workers consumer
-```
-
-Use this same file set for telemetry-enabled operation. Fixed loopback port
-mappings in this development override are for one process of each role; a scaled
-multi-instance topology needs separate mappings in the later concurrency block.
+Use the unified startup command in README.md. It includes migrations, all three
+roles, dependency readiness, metrics, tracing and dashboards. The loopback port
+mappings support one instance per role; compose.distributed.yaml provides the
+separate multi-instance correctness topology.
 
 ## Verification and limits
 
@@ -146,7 +134,6 @@ Dependency stop/start is explicit in PowerShell. The smoke container receives no
 Docker socket and cannot stop host services. No test deletes volumes or resets the
 normal database. PostgreSQL integration tests use only finance-postgres.
 
-This block does not install Prometheus, Grafana or a tracing backend. It exposes
-the metrics those tools will scrape. SQS/IAM behavior, race checks and runtime
-failure recovery must be validated in Docker before this block is considered
-complete. Distributed crash tests and measured performance remain later work.
+Prometheus, Grafana and Tempo are configured by the observability and tracing
+overrides. Use the complete startup in README.md. Distributed recovery and load
+suites are implemented separately; their results must identify the tested revision.

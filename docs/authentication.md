@@ -15,13 +15,12 @@ The principal is immutable outside its package and passed through context.
 
 The HTTP server authenticates requests before routing. Only GET/HEAD for
 `/health/live` and `/health/ready` bypass authentication. This does not
-implement the readiness endpoint, which remains pending.
+implement readiness itself; readiness is provided by the observability module.
 
 `RequireInternal` and `RequireProvider` enforce actor categories.
 `Principal.AuthorizeProvider` checks provider ownership. Business handlers
-and use cases must apply these policies when implemented, including before
-returning transaction lookups or idempotent replays. The financial endpoints
-are not implemented by this authentication change.
+and use cases apply these policies before returning transaction lookups or
+idempotent replays; see financial-api.md.
 
 ## Configuration
 
@@ -104,7 +103,8 @@ and Keycloak services.
 
 Real-IdP tests use test-only HTTP handlers to verify provider isolation and
 internal-service restrictions. They do not claim to test persistence,
-financial operations or replay authorization, which are still pending.
+financial operations or replay authorization. Those behaviors are covered by
+the separate financial API integration suite.
 
 The existing HTTP lifecycle and PostgreSQL lifecycle tests replace the OIDC
 adapter so those tests continue to isolate their respective responsibilities.

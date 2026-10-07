@@ -9,7 +9,7 @@ It does not publish messages or write outbox rows.
 All envelopes contain `eventId`, `eventType`, `aggregateId`, `correlationId`,
 optional `causationId`, `occurredAt`, `version` and typed `data`.
 Constructors set the type and schema version (`1`). All events use wallet ID
-as aggregate ID, supporting wallet-based SQS FIFO routing later.
+as aggregate ID, supporting wallet-based SQS FIFO routing.
 
 Occurrence time is the transaction decision's update time, serialized in UTC
 RFC 3339 (with fractional seconds when present). Amounts are canonical decimal
@@ -69,8 +69,8 @@ The constructor is not persistent deduplication: calling it repeatedly with the
 same pre-decision data can recreate a batch. Database uniqueness and application
 transaction boundaries must prevent duplicate logical outbox records.
 
-No publishing, SQS routing implementation or outbox persistence is added in this
-step. These guarantees will require real database and broker integration tests.
+The PostgreSQL adapter persists these snapshots and the publisher routes them
+through SQS FIFO. Database, distributed and recovery suites exercise delivery.
 Full event payloads are business data and should not be written to application logs.
 
 ## Verification

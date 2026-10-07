@@ -37,8 +37,8 @@ docker compose run --rm sqs-init
 
 The command provisions queues first, then creates or updates IAM users and
 policies. Repeating it preserves the identities and reconciles the policies.
-It does not issue persistent application access keys in this stage. Runtime
-credential provisioning and Go SDK configuration remain pending.
+Dedicated provisioning services issue runtime credentials into mounted volumes.
+The Go SDK reads credentials for the consumer and publisher roles.
 
 Administrative credentials remain confined to infrastructure provisioning.
 They must not be passed to the Go application as a shortcut.
@@ -71,23 +71,17 @@ can leave temporary resources; names include `wager-iam-` and a unique run
 suffix. Do not remove unrelated resources when cleaning up.
 
 These tests exercise policy templates on the real emulator and inspect the
-actual provisioned policies. They do not yet exercise a Go worker with its
-own runtime credentials or prove financial correctness.
+actual provisioned policies. They do not by themselves prove Go worker integration or financial correctness;
+the consumer, distributed and recovery suites cover those separate behaviors.
 
-## Emulator Authentication Limitation
+## Authentication boundary and integration
 
-MiniStack 1.5.21 with AUTH=true evaluates IAM permissions but does not
-validate general SigV4 signatures. A valid access key can therefore be
-impersonated with an incorrect secret in this local emulator.
+The unmodified MiniStack 1.5.21 image accepts a known access key with an incorrect
+secret. The custom broker signature gate authenticates supported requests before
+they reach IAM evaluation. See broker-authentication.md for protocol limitations
+and the required security and Go regression checks. Policy tests alone do not
+prove signature validation.
 
-Successful IAM policy tests demonstrate authorization behavior only. They
-do not resolve or hide the separate incorrect-secret test failure in
-`deploy/sqs/verify.py`. Full broker authentication must be verified against
-an environment implementing signature validation before claiming that
-security requirement is fully demonstrated.
-
-## Integration Status
-
-The Go SQS adapter, runtime credentials, inbox consumer, outbox publisher,
-DLQ processing and financial authorization remain pending. No provider ID
-from an untrusted message body may become an authenticated identity.
+The Go consumer, inbox and outbox publisher are implemented. The shared input
+queue is for a trusted internal producer; a provider ID in an untrusted message
+body must never become an independently authenticated provider identity.
