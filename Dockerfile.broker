@@ -1,0 +1,8 @@
+FROM ministackorg/ministack:1.5.21
+COPY deploy/broker/ /opt/wagering-broker/
+ENV PYTHONPATH="/opt/wagering-broker:.:${PYTHONPATH}"
+RUN python /opt/wagering-broker/check_upstream.py
+RUN python -m unittest discover -s /opt/wagering-broker -p 'test_*.py' -v
+ENV SERVICES=sqs,iam SFTP_ENABLED=0 IOT_MTLS_ENABLED=0
+ENTRYPOINT ["python", "-m", "hypercorn", "strict_broker:app", "--bind", "0.0.0.0:4566", "--graceful-timeout", "45"]
+CMD []
