@@ -1,0 +1,41 @@
+# Isolated credentials/queues, no host port and no financial database.
+name: wagering-broker-security
+services:
+  ministack:
+    build:
+      context: .
+      dockerfile: Dockerfile.broker
+    image: go-wagering-service:broker-1.5.21-sigv4-v1
+    environment:
+      AUTH: "true"
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: sqs_admin_local
+      MINISTACK_ACCOUNT_ID: "000000000000"
+      MINISTACK_REGION: us-east-1
+      MINISTACK_HOST: ministack
+      PERSIST_STATE: "1"
+      STATE_DIR: /data/state
+    volumes:
+      - broker_security_data:/data
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:4566/_ministack/health', timeout=3).close()"]
+      interval: 2s
+      timeout: 4s
+      retries: 30
+    stop_grace_period: 60s
+  security-tests:
+    image: ministackorg/ministack:1.5.21
+    entrypoint: [python]
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: sqs_admin_local
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://ministack:4566
+      AWS_EC2_METADATA_DISABLED: "true"
+    volumes:
+      - ./deploy/sqs:/scripts:ro
+    depends_on:
+      ministack:
+        condition: service_healthy
+volumes:
+  broker_security_data:

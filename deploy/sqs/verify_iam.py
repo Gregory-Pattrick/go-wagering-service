@@ -129,7 +129,7 @@ def main():
                     cleanup_errors.append(error.response["Error"]["Code"])
         require(not cleanup_errors, "IAM test cleanup failed: " + ", ".join(cleanup_errors))
     print("SQS IAM policy verification passed.", flush=True)
-    print("LIMITATION: this verifies authorization, not SigV4 signature authentication.", flush=True)
+    print("SCOPE: this suite verifies IAM policies; verify_signatures.py verifies signatures.", flush=True)
 
 
 if __name__ == "__main__":
