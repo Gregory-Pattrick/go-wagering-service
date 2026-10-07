@@ -1,632 +1,216 @@
 # Go Wagering Service
 
-> Broker authentication update: the project now includes a custom signature gate
-> in `Dockerfile.broker`. Statements below about missing SigV4 validation describe
-> the unmodified upstream MiniStack image. See [broker authentication](docs/broker-authentication.md)
-> for the supported protocol, verification commands and pending runtime checks.
+Distributed financial processing in Go with Uber Fx, PostgreSQL, Keycloak and
+SQS. HTTP and the SQS consumer share financial rules and persistent idempotency.
+Wallet updates, immutable ledger entries, a double-entry journal and integration
+events commit atomically. Separate workers publish the outbox and resume pending
+references. OpenTelemetry, Prometheus/Grafana and HTTP/SQS load suites are included.
 
-
-Go backend for a wagering service, currently under development.
-
-## Current Status
-
-HTTP application composed with Uber Fx, environment configuration,
-structured JSON logging, PostgreSQL connectivity and graceful shutdown.
-
-The public liveness endpoint is available at `GET /health/live`.
-
-The application connects to PostgreSQL through `pgxpool` during startup.
-The connection pool is initialized before the HTTP server starts and
-closed after the HTTP server stops.
-
-Tests cover configuration validation, HTTP liveness, listener shutdown
-and startup failure when the configured port is already in use.
-Integration tests cover PostgreSQL connectivity, application database
-role and connection pool shutdown.
-
-Keycloak is provisioned with local service identities and client credentials
-token issuance. The Go HTTP server verifies access tokens before routing,
-except for public health checks.
-
-Actor authorization policies and provider ownership checks are covered by
-unit tests and real-Keycloak integration tests. Financial endpoints and idempotent replays now apply these policies
-before accessing provider-scoped records.
-
-Financial domain rules, versioned schema, accounting constraints and SQL
-repositories are implemented. Financial HTTP routes and persistent replay are implemented. SQS runtime
-integration remains pending. See [Financial Persistence](docs/persistence.md) for validation.
+See [Architecture](ARCHITECTURE.md) for decisions and
+[Delivery review](docs/DELIVERY-REVIEW.md) for open verification gates.
+Implementation presence does not imply that every delivery gate has passed.
 
 ## Prerequisites
 
-- Go matching the version declared in `go.mod` for execution on the host
-- Docker Engine or Docker Desktop with Linux containers
-- Docker Compose
+- Docker Engine or Docker Desktop with Linux containers and Docker Compose.
+- Windows PowerShell for the supplied orchestration scripts.
+- Go matching `go.mod` (1.27.1) for host commands; Docker supplies Go for container tests.
+- Free loopback ports: 5432, 4566, 8080, 8081, 9090–9093, 3000 and 3200.
 
-The commands below use PowerShell.
+Run commands from the repository root. The script-block form below also works
+when PowerShell blocks direct `.ps1` execution. Execute complete blocks, not
+individual lines from inside their try/finally statements.
 
-## Local Execution
-
-Start PostgreSQL:
-
-```powershell
-docker compose up -d --wait --wait-timeout 240 postgres keycloak
-```
-
-Stop the containerized application if it is using port 8080:
+## Start the complete local stack
 
 ```powershell
-docker compose stop app
+& ([scriptblock]::Create((Get-Content -Raw -LiteralPath ".\scripts\local-stack.ps1"))) -Action start
 ```
 
-Configure the host application and start it:
+This is the primary local startup command, equivalent to the required Compose
+workflow with all relevant override files/profiles. It builds the application
+and the signature-validating broker, gracefully stops existing application
+processes and the broker, then starts dependencies and applies migrations before
+the API, workers and consumer. It enables PostgreSQL/SQS readiness, metrics,
+tracing and dashboards. The final PASS requires all four readiness endpoints.
 
-```powershell
-$env:HTTP_ADDR = "127.0.0.1:8080"
-$env:LOG_LEVEL = "INFO"
-$env:DATABASE_URL = "postgres://wagering_app:wagering_app_local@127.0.0.1:5432/wagering?sslmode=disable"
+The project name is `go-wagering-service`. Existing named volumes are retained.
+Starting again briefly interrupts the local application; it does not reset its
+database or queues. A bare `docker compose up` selects only the base file and
+is not the complete delivery topology.
 
-go run ./cmd/service
-```
-
-Press Ctrl+C to stop the application.
-
-The application does not automatically load `.env` files.
-
-## Configuration
-
-Configuration is read from process environment variables.
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| HTTP_ADDR | 127.0.0.1:8080 | HTTP listener address |
-| LOG_LEVEL | INFO | DEBUG, INFO, WARN or ERROR; case-insensitive |
-| DATABASE_URL | None; required | PostgreSQL connection URL |
-
-Invalid configuration prevents application startup.
-Defaults apply only when a variable is absent.
-
-The `.env.example` file documents the available settings.
-
-Compose explicitly provides `DATABASE_URL` using the `postgres` service
-hostname. When running Go on the host, use `127.0.0.1` instead.
-
-`POSTGRES_ADMIN_PASSWORD` configures the local PostgreSQL administrator
-password through Compose and defaults to `postgres_local`.
-It is not an application configuration variable.
-
-## Liveness
-
-With the application running on port 8080:
-
-```powershell
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/health/live"
-```
-
-Expected JSON response:
-
-```json
-{"status":"ok"}
-```
-
-PowerShell displays the response as an object.
-
-This endpoint checks application liveness only. It does not query
-PostgreSQL or report dependency readiness.
-
-A dependency readiness endpoint covering PostgreSQL and SQS is planned.
-
-## Docker
-
-Build and start the application and PostgreSQL:
-
-```powershell
-docker compose up --build -d --wait --wait-timeout 240
-```
-
-Check container status and application logs:
-
-```powershell
-docker compose ps
-docker compose logs --tail=40 app
-```
-
-Check liveness:
-
-```powershell
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/health/live"
-```
-
-Stop the application gracefully:
-
-```powershell
-docker compose stop app
-```
-
-Start it again:
-
-```powershell
-docker compose start app
-```
-
-Stop and remove the Compose service containers and network:
-
-```powershell
-docker compose down
-```
-
-The application listens on `0.0.0.0:8080` inside the container.
-The published port is bound to `127.0.0.1:8080` on the host.
-
-The runtime image runs as a non-root user and contains no shell.
-The build stage uses the Go version declared in `go.mod`.
-
-Compose starts the application after the PostgreSQL health check succeeds.
-The application then verifies its own database connection before starting
-the HTTP listener.
-
-The `tests` service uses the `testing` profile and does not start during
-the default Compose startup.
-
-Compose also provisions Keycloak with an automatically imported realm.
-Local SQS queues are provisioned automatically through MiniStack.
-
-## Verification
-
-Run unit and HTTP lifecycle tests, static analysis and compilation:
-
-```powershell
-go test ./...
-go vet ./...
-go build ./...
-```
-
-These commands do not require a running PostgreSQL instance.
-Database integration tests use the separate `integration` build tag.
-
-## Linux Tests with the Race Detector
-
-Build the test image:
-
-```powershell
-docker build --target test -t go-wagering-service:test .
-```
-
-Run tests with the race detector and without cached test results:
-
-```powershell
-docker run --rm go-wagering-service:test
-```
-
-Run static analysis:
-
-```powershell
-docker run --rm go-wagering-service:test go vet ./...
-```
-
-Rebuild the test image after changing source files.
-Building the runtime image does not automatically run the test stage.
-
-The race detector checks Go memory access during executed tests.
-Distributed financial correctness requires additional integration tests.
-
-## Local PostgreSQL
-
-PostgreSQL runs with a persistent named volume and a health check.
-
-| Setting | Value |
+| Component | Local address |
 | --- | --- |
-| Image | postgres:17.11-bookworm |
-| Host address | 127.0.0.1:5432 |
-| Compose network address | postgres:5432 |
-| Database | wagering |
-| Application schema | wagering |
+| API | http://127.0.0.1:8080 |
+| Public liveness / readiness | `/health/live` / `/health/ready` on the API |
+| Keycloak | http://localhost:8081 |
+| Grafana dashboard | http://127.0.0.1:3000/d/wagering-operations |
+| Prometheus | http://127.0.0.1:9093 |
+| Tempo | http://127.0.0.1:3200 |
+| API / workers / consumer operations | Loopback ports 9090 / 9091 / 9092 |
 
-### Local Development Accounts
+Grafana uses `admin` / `grafana_local`; Keycloak administration uses
+`admin` / `admin_local`. These are public local fixtures. All published ports
+are bound to loopback. The operations endpoints are unauthenticated on the
+private container network; business-port `/metrics` requires the internal token.
 
-| Account | Purpose | Local password |
+## Run the authenticated smoke tests
+
+```powershell
+& ([scriptblock]::Create((Get-Content -Raw -LiteralPath ".\scripts\local-stack.ps1"))) -Action smoke
+```
+
+This creates synthetic local wallet/transaction records and checks HTTP BET/WIN,
+original-result replay, reconciliation, SQS processing, duplicate deliveries,
+business rejection and actual DLQ redrive. It is not a read-only health check.
+
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/health/live"
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/health/ready"
+```
+
+Both return `status: ok` when healthy. Readiness includes PostgreSQL and SQS;
+liveness remains independent of dependencies.
+
+## Status and graceful stop
+
+```powershell
+& ([scriptblock]::Create((Get-Content -Raw -LiteralPath ".\scripts\local-stack.ps1"))) -Action status
+& ([scriptblock]::Create((Get-Content -Raw -LiteralPath ".\scripts\local-stack.ps1"))) -Action stop
+```
+
+Stop preserves containers and named volumes. Do not use `down -v` unless you
+intend to delete local data. PostgreSQL bootstrap scripts run only on an empty
+data directory. Changing bootstrap passwords does not rotate existing accounts.
+
+## Configuration and local identities
+
+The Go application reads process environment variables, not `.env` files.
+Compose supplies container addresses and credentials explicitly. Compose's own
+`.env` substitution is separate from application configuration loading.
+
+| Settings | Purpose |
+| --- | --- |
+| `HTTP_ADDR`, `LOG_LEVEL`, `DATABASE_URL` | HTTP listener, log threshold and application database connection |
+| `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL` | Trusted issuer, audience and key endpoint |
+| `OIDC_PROVIDER_CLIENTS`, `OIDC_INTERNAL_CLIENT` | Allowlisted service identities |
+| `SQS_ENDPOINT`, `AWS_REGION`, role credential-file settings | Explicit broker endpoint and dedicated runtime credentials |
+| `OBSERVABILITY_ENABLED`, `OPS_ADDR`, monitor settings | Dependency checks and metrics |
+| `TRACING_ENABLED`, OTLP endpoint and sampling settings | Optional tracing |
+
+Examples: `.env.example`, `.env.auth.example`, `.env.sqs.example`,
+`.env.tracing.example`. Detailed settings are in the component documents below.
+Default examples are not production secrets. Production needs TLS, managed
+credentials and durable IdP storage.
+
+| Client | Local secret | Permissions |
 | --- | --- | --- |
-| postgres | Bootstrap and administration | postgres_local |
-| wagering_migrator | Schema migrations | wagering_migrator_local |
-| wagering_app | Application queries | wagering_app_local |
+| `wallet-service` | `wallet-service-local-secret` | Wallet management and reconciliation |
+| `provider-a` | `provider-a-local-secret` | Provider A submissions and transaction reads |
+| `provider-b` | `provider-b-local-secret` | Provider B submissions and transaction reads |
 
-These credentials are for local development only.
+Keycloak imports the versioned realm automatically. Clients use
+`client_credentials`; the application neither stores passwords nor issues tokens.
+Recreating Keycloak restores the imported realm and signing keys; obtain new
+tokens afterward. PostgreSQL data is stored independently.
 
-The administrator password can be configured with
-`POSTGRES_ADMIN_PASSWORD`. Migration and application passwords are
-defined in `deploy/postgres/001-bootstrap.sql`.
-
-The application and migration accounts are not superusers.
-The application account cannot create tables.
-Table privileges will be granted explicitly by migrations.
-
-### Database Verification
-
-With PostgreSQL running:
+Example: obtain an internal token and open a wallet:
 
 ```powershell
-docker compose exec postgres psql -U postgres -d wagering -c "SELECT current_database(), version();"
+$token = Invoke-RestMethod -Method Post -Uri "http://localhost:8081/realms/wagering/protocol/openid-connect/token" -ContentType "application/x-www-form-urlencoded" -Body @{
+    grant_type = "client_credentials"
+    client_id = "wallet-service"
+    client_secret = "wallet-service-local-secret"
+}
+$headers = @{ Authorization = "Bearer $($token.access_token)" }
+$body = @{ playerId = [guid]::NewGuid().ToString(); initialBalance = @{ amount = "100.00"; currency = "BRL" } } | ConvertTo-Json -Depth 4
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8080/wallets" -Headers $headers -ContentType "application/json" -Body $body
 ```
 
-### Persistence
+For all routes, status codes, pagination and idempotency rules, see
+[Financial API](docs/financial-api.md) and `scripts/smoke-api.ps1`.
 
-The `postgres_data` volume survives container removal with
-`docker compose down`.
+## Migrations and queues
 
-Do not add `-v` unless you intentionally want to delete the local database.
+Complete startup applies every missing migration through `trace-migrate`, using
+the migration account. It checks checksums and serializes migrators. The name
+predates unified startup; it applies financial, accounting and tracing migrations.
 
-Bootstrap scripts run only when the data directory is empty.
-Changing bootstrap SQL or initialization passwords does not update
-an existing database automatically.
-
-Subsequent schema changes must use versioned migrations.
-
-## PostgreSQL Connection
-
-The application connects to PostgreSQL through `pgxpool` using
-`DATABASE_URL`.
-
-The database initialization hook uses a five-second timeout.
-Startup fails if the initial database connection cannot be established.
-
-The pool is initialized before the HTTP server starts and closed after
-the HTTP server stops.
-
-Each application instance uses a pool with a maximum of 10 connections.
-The Compose application uses the `wagering_app` database account.
-
-### Integration Tests
-
-Run integration tests against the real PostgreSQL container with the
-race detector enabled:
-
-```powershell
-docker compose --profile testing run --build --rm tests go test -tags=integration -race -count=1 ./...
-```
-
-This command builds the test image and starts PostgreSQL as a dependency.
-
-Integration tests verify database connectivity, the `wagering_app` role,
-its non-superuser status and connection pool shutdown.
-
-Financial migrations and their isolated integration suite are documented in
-[Financial Persistence](docs/persistence.md).
-
-## Local Identity Provider
-
-Keycloak runs at http://localhost:8081 and imports the `wagering` realm
-from `deploy/keycloak/wagering-realm.json`.
-
-Start and verify the identity provider:
-
-```powershell
-docker compose up -d --wait --wait-timeout 240 keycloak
-docker compose ps keycloak
-
-Invoke-RestMethod -Uri "http://localhost:8081/realms/wagering/.well-known/openid-configuration"
-```
-
-### Local Service Identities
-
-| Client ID | Local client secret | Actor type | Provider ID |
-| --- | --- | --- | --- |
-| provider-a | provider-a-local-secret | provider | provider-a |
-| provider-b | provider-b-local-secret | provider | provider-b |
-| wallet-service | wallet-service-local-secret | internal | Not applicable |
-
-These credentials are public development examples, not production secrets.
-
-Clients use `client_credentials`. Interactive login, implicit flow and
-password grants are disabled for these clients.
-
-Tokens expire after five minutes and include the `wagering-api` audience.
-Provider identities are assigned by Keycloak through fixed token claims.
-
-Request a provider token:
-
-```powershell
-$tokenResponse = Invoke-RestMethod `
-    -Method Post `
-    -Uri "http://localhost:8081/realms/wagering/protocol/openid-connect/token" `
-    -ContentType "application/x-www-form-urlencoded" `
-    -Body @{
-        grant_type = "client_credentials"
-        client_id = "provider-a"
-        client_secret = "provider-a-local-secret"
-    }
-
-$providerToken = $tokenResponse.access_token
-```
-
-The admin console is available at http://localhost:8081/admin/.
-The bootstrap username is `admin`. Its password defaults to `admin_local`
-and can be configured through `KEYCLOAK_ADMIN_PASSWORD`.
-
-### Development Lifecycle
-
-Keycloak uses its embedded development database without a persistent
-volume. Recreating the Keycloak container discards administrative changes
-and signing keys, then imports the versioned realm configuration again.
-
-After editing the realm JSON, recreate only Keycloak:
-
-```powershell
-docker compose up -d --force-recreate --wait --wait-timeout 240 keycloak
-```
-
-Obtain new tokens after recreation. The PostgreSQL data volume is unaffected.
-
-A normal container restart preserves the existing realm. Startup import
-does not overwrite a realm that already exists.
-
-This setup uses HTTP and development mode for local execution.
-Production deployment requires TLS, managed secrets and a production
-identity-provider database.
-
-### Implementation Status
-
-Token issuance, JWT signature verification and HTTP authentication are
-implemented. Liveness remains public.
-
-Financial endpoints and their resource-level authorization are still
-pending.
-
-See [Authentication](docs/authentication.md) for configuration, policies,
-test commands and current limitations. Host configuration examples are
-available in `.env.auth.example`; the application does not load this file
-automatically.
-
-## SQS Implementation Status
-
-The local environment includes input and output FIFO queues, their
-dead-letter queues and redrive configuration.
-
-Provisioning is repeatable and preserves existing messages.
-Functional checks cover queue configuration, delivery, visibility,
-redelivery, deletion and transport deduplication.
-
-Dedicated producer, consumer and outbox-publisher IAM identities and
-least-privilege policies are provisioned automatically.
-
-See [SQS IAM Policies](docs/sqs-iam.md) for permissions and verification.
-
-Runtime credentials for the Go application, the Go SQS adapter,
-financial consumers, inbox and outbox processing are not implemented yet.
-
-Administrative credentials are local provisioning fixtures and are not
-provided to the Go application.
-
-See [Local SQS Infrastructure](docs/sqs.md) for setup and verification.
-
-### Local Emulator Limitation
-
-With AUTH=true, MiniStack enables IAM policy evaluation but does not
-validate general SigV4 signatures.
-
-The unknown-access-key test passes. The incorrect-secret test fails on
-version 1.5.21 and remains a documented security limitation.
-
-Functional SQS checks pass independently of that verification.
-Broker security verification is not complete.
-
-## Money Value Object
-
-Monetary values use exact `int64` minor units and explicit BRL or USD
-currencies. External amounts must be nonnegative decimal strings with
-exactly two fractional digits.
-
-The immutable value object validates input, rejects currency mismatches
-and detects arithmetic overflow. No monetary operation uses floating point.
-
-See [Money Value Object](docs/money.md) for the input contract, internal
-signed values and verification details.
-
-## Wallet Domain
-
-The wallet aggregate supports creation, rehydration and exact credit
-and debit operations. It validates currency compatibility, prevents
-negative balances and checks monetary and version overflow.
-
-Wallets start at version 1. Each successful balance change increments
-the version once. Rejected operations leave the original state unchanged.
-
-See [Wallet Aggregate](docs/wallet.md) for domain rules and the planned
-SQL transaction boundary.
-
-SQL persistence, authenticated wallet routes and wallet row locking are
-implemented. Three-process concurrency verification remains pending.
-
-## Transaction Domain
-
-Financial transactions validate operation kinds, amount policies and
-reference requirements. Internal OPENING transactions have a separate
-constructor and do not require external provider metadata.
-
-The domain enforces lifecycle transitions and terminal-state protection.
-Financial result snapshots preserve the original balance and wallet
-version for future persisted replays.
-
-Canonical business payloads are hashed with SHA-256. The shared application
-service now implements database-backed idempotency and financial processing.
-
-See [Transaction Identity and Lifecycle](docs/transactions.md).
-
-## Wallet Ledger Domain
-
-Immutable ledger entries record each movement's direction, amount,
-balance before and balance after.
-
-Construction and rehydration enforce exact balance equations,
-compatible currencies, positive movement amounts and nonnegative
-balances. Invalid values and arithmetic overflow are rejected.
-
-See [Immutable Wallet Ledger](docs/ledger.md).
-
-Database constraints, immutable ledger protection and atomic persistence
-are included in the financial persistence block.
-
-## Financial Processing Rules
-
-The domain evaluator connects transactions, wallets and ledger entries
-for BET, WIN, LOSS, REFUND and ROLLBACK.
-
-It validates reference eligibility, full reversal amounts and financial
-context. Missing or pending references leave operations waiting without
-changing the wallet.
-
-Successful movements produce a new wallet state, a processed transaction
-and one ledger entry. LOSS preserves the balance and version without
-creating an entry. Business rejections preserve the wallet.
-
-See [External Financial Processing Rules](docs/processing.md).
-
-The HTTP API and SQL adapter persist financial decisions atomically.
-Durable retry workers and distributed verification remain pending.
-
-## Financial Domain Events
-
-Typed, immutable events describe processed transactions, business
-rejections, reference waits and wallet balance changes.
-
-Envelopes include event identity, correlation, optional causation,
-UTC occurrence time, schema version and typed financial data.
-Internal OPENING events omit external provider metadata.
-
-Events preserve the original decision snapshot. Outbox persistence is
-implemented; broker publication remains pending.
-
-See [Typed Financial Events](docs/events.md).
-
-## Financial Database Block
-
-See [Financial Schema](docs/financial-schema.md),
-[Double-Entry Accounting](docs/accounting.md) and
-[Financial Persistence](docs/persistence.md).
-
-Apply the migrations:
+Standalone migration command:
 
 ```powershell
 docker compose -f compose.yaml -f compose.finance.yaml --profile finance run --build --rm migrate
 ```
 
-Run the isolated database suite with the race detector:
+Down migrations are destructive. To reverse **only a disposable test database**,
+start the isolated dependency and target version zero explicitly:
+
+```powershell
+docker compose -f compose.yaml -f compose.finance.yaml --profile financial-testing up -d --wait finance-postgres
+docker compose -f compose.yaml -f compose.finance.yaml --profile financial-testing run --build --rm --no-deps -e MIGRATION_DATABASE_URL=postgres://wagering_migrator:wagering_migrator_local@finance-postgres:5432/wagering?sslmode=disable --entrypoint go finance-tests run ./cmd/migrate -target=0 -allow-down
+```
+
+Run the financial integration suite afterward to reapply and verify migrations.
+Never reverse the development database just to execute tests.
+
+Queue provisioning creates input/output FIFO queues, their DLQs, redrive policies
+and dedicated IAM identities without purging existing messages. Credentials are
+stored in role-specific named volumes; application processes receive read-only
+mounts, never administrative credentials. See [Broker authentication](docs/broker-authentication.md)
+for the custom MiniStack signature gate and its compatibility limits.
+
+## Verification
+
+Host unit tests, analysis and compilation:
+
+```powershell
+go test -count=1 ./...
+go vet ./...
+go build ./...
+```
+
+Linux race tests (Docker avoids a host C compiler requirement):
+
+```powershell
+docker build --target test -t go-wagering-service:test .
+docker run --rm go-wagering-service:test
+```
+
+Real infrastructure suites use explicit build tags and isolated test resources.
+Run suites sequentially; several integration suites reset `finance-postgres`.
 
 ```powershell
 docker compose -f compose.yaml -f compose.finance.yaml --profile financial-testing run --build --rm finance-tests
-```
-
-The test database is separate from the normal development database. The tests
-include destructive migration reversal only in that isolated database.
-
-## Financial HTTP API
-
-Wallet creation, wallet/ledger queries, wagering submissions, transaction queries
-and reconciliation are available through authenticated routes. Financial replay
-returns the original stored result without applying another movement.
-
-See [Financial HTTP API](docs/financial-api.md) for exact routes, request limits,
-status codes, idempotency policy, pagination and remaining work.
-
-Run the real PostgreSQL and Keycloak API suite separately from finance-tests:
-
-```powershell
 docker compose -f compose.yaml -f compose.finance.yaml -f compose.api.yaml --profile financial-testing --profile api-testing run --build --rm api-tests
 ```
 
-Rebuild the normal service and run the PowerShell smoke script:
+| Verification | Script or documentation |
+| --- | --- |
+| Broker signatures, IAM and restart | `scripts/test-broker-security.ps1` |
+| Three APIs, fifty duplicates, HTTP/SQS and SQL audit | `scripts/test-distributed.ps1` |
+| Controlled SIGKILL and restart recovery | `scripts/test-recovery.ps1` |
+| Tracing and collector outage | `scripts/test-tracing.ps1` |
+| Dashboard queries, real traffic and outbox recovery | `scripts/test-dashboards.ps1` |
+| HTTP performance | `scripts/test-performance.ps1` |
+| SQS performance | `scripts/test-sqs-performance.ps1` |
+| Worker / inbox integration | [Workers](docs/workers.md), [Consumer](docs/consumer.md) |
+| Readiness and dependency outages | [Observability](docs/observability.md) |
 
-```powershell
-docker compose up --build -d --wait --wait-timeout 180 app
-.\scripts\smoke-api.ps1
-```
+Execute a listed script using the same complete script-block form as startup.
+A scenario PASS is insufficient when a script still has an SQL audit or process
+inspection to complete. Preserve the final result and evidence directory.
 
-Pending references and outbox events are durable, but their background workers
-are not yet implemented. Broker readiness and full observability remain pending.
+## Documentation and delivery evidence
 
-## Durable Workers
+- [Architecture](ARCHITECTURE.md), [delivery review](docs/DELIVERY-REVIEW.md).
+- [Money](docs/money.md), [transactions](docs/transactions.md), [processing](docs/processing.md), [events](docs/events.md).
+- [Schema](docs/financial-schema.md), [accounting](docs/accounting.md), [persistence](docs/persistence.md).
+- [Authentication](docs/authentication.md), [SQS IAM](docs/sqs-iam.md), [consumer](docs/consumer.md), [workers](docs/workers.md).
+- [Tracing](docs/tracing.md), [dashboards](docs/dashboards.md), [operation logs](docs/operation-logs.md).
+- [HTTP load methodology](docs/PERFORMANCE.md), [SQS load methodology](docs/SQS-PERFORMANCE.md).
 
-Reference recovery and outbox publication run in a separate Fx process.
-See [Durable reference and outbox workers](docs/workers.md) for startup,
-configuration, least-privilege publisher credentials and recovery tests.
-
-## SQS Input Consumer
-
-The separate `cmd/consumer` process handles input FIFO messages with a
-transactional inbox and the same financial use case as HTTP. See
-[SQS consumer and transactional inbox](docs/consumer.md) for its trust boundary,
-acknowledgment rules, broker redrive, local execution and real SQS smoke test.
-
-## Readiness and Metrics
-
-The optional telemetry Compose override adds dependency readiness and Prometheus
-metrics for the API, reference/outbox workers and SQS consumer. See
-[Dependency readiness and process metrics](docs/observability.md) for the full
-stack command, loopback operations ports, metric meanings and outage tests.
-Telemetry is enabled by `OBSERVABILITY_ENABLED=true`; earlier base commands retain
-their previous behavior when that variable is absent.
-
-## Multi-process Correctness Tests
-
-See [distributed tests](docs/distributed-tests.md) for an isolated topology with
-three APIs, two publishers and two consumers, race-instrumented Go processes,
-concurrent HTTP/SQS scenarios and a SQL accounting audit.
-Runtime results must be collected locally; generated test code is not evidence
-of a successful execution.
-
-## Controlled Process Recovery Tests
-
-See [recovery tests](docs/recovery-tests.md) for test-only fault barriers, actual
-SIGKILL scenarios, durable lease takeover, input redelivery and process restarts.
-The isolated suite records evidence only when executed locally.
-
-## Distributed Tracing
-
-See [tracing](docs/tracing.md) for optional OpenTelemetry instrumentation,
-transactional outbox trace metadata, SQS propagation, Collector/Tempo/Grafana
-and the collector-outage validation workflow. Operational dashboards are separate.
-
-## Operational Dashboards
-
-The opt-in observability stack provisions Prometheus and a Grafana dashboard
-for HTTP latency, financial outcomes, idempotent replays, retries, conflicts,
-queue depth, outbox age, pending references and reconciliation mismatches.
-
-After applying the tracing setup, run from the repository root:
-
-```powershell
-.\scripts\test-dashboards.ps1
-```
-
-The check generates real local financial records, temporarily pauses workers,
-verifies measurable outbox backlog and resumes workers before checking drain.
-Open http://127.0.0.1:3000/d/wagering-operations after completion.
-See [Operational dashboards](docs/dashboards.md) for prerequisites, local
-credentials, PowerShell instructions and metric interpretation.
-
-## HTTP Performance Measurements
-
-An isolated k6 workload measures multiple wallets, a contended wallet and
-idempotent replays with three API processes and two publishers. It uses normal
-Go builds, records latency/throughput/errors/outbox samples and requires
-post-load reconciliation and SQL accounting audits.
-
-```powershell
-& ([scriptblock]::Create((Get-Content -Raw -LiteralPath ".\scripts\test-performance.ps1")))
-```
-
-See [Performance methodology](docs/PERFORMANCE.md). Results are generated under
-`test-results/performance-<timestamp>` only when executed. This HTTP block does
-not yet measure SQS offered load or asynchronous end-to-end latency.
-
-## SQS Performance Measurements
-
-After the HTTP performance block, run the isolated SQS workload:
-
-```powershell
-& ([scriptblock]::Create((Get-Content -Raw -LiteralPath ".\scripts\test-sqs-performance.ps1")))
-```
-
-The Go producer separates SDK send time from observed financial completion and
-verifies duplicate-envelope inbox completion and post-load wallet reconciliation.
-A separate case pauses both output publishers and verifies durable backlog and
-recovery. See [SQS performance methodology](docs/SQS-PERFORMANCE.md) for timing
-limits and the generated evidence required before reporting measured results.
+Generated evidence lives under ignored `test-results`. Commit only selected
+sanitized reports, preserving the measured revision, local changes and machine
+configuration. Earlier measurements used the original MiniStack image and do not
+measure signature-gate overhead. Final clean-checkout verification and evidence
+packaging remain delivery gates; do not infer success from generated test code.
